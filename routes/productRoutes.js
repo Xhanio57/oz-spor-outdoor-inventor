@@ -12,7 +12,135 @@ router.get('/api/products', async (req, res) => {
   }
 });
 
-// PDF Etiket İndir (Basit versyon)
+// Yeni ürün ekle (beden seçenekleriyle)
+router.post('/api/products', async (req, res) => {
+  try {
+    const { name, price, category, barcode, image, description } = req.body;
+
+    if (!name || !price || !category) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ürün adı, fiyat ve kategori zorunludur'
+      });
+    }
+
+    const newProduct = new Product({
+      name,
+      price: parseFloat(price),
+      category,
+      barcode: barcode && barcode.trim() ? barcode.trim() : undefined,
+      image: image || undefined,
+      description: description || ''
+    });
+
+    await newProduct.save();
+
+    res.status(201).json({
+      success: true,
+      message: `Ürün "${name}" başarıyla eklendi. Barkod: ${newProduct.barcode}`,
+      product: newProduct
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bu barkod numarası zaten kullanılıyor'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Ürün eklenirken hata oluştu: ' + error.message
+    });
+  }
+});
+
+// Ürün güncelle
+router.put('/api/products/:id', async (req, res) => {
+  try {
+    const { name, price, category, image, description } = req.body;
+    
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      { name, price, category, image, description },
+      { new: true, runValidators: true }
+    );
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Ürün başarıyla güncellendi',
+      product
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Güncelleme hatası: ' + error.message });
+  }
+});
+
+// Beden bazlı stok güncelle (NEW)
+router.patch('/api/products/:id/size-stock', async (req, res) => {
+  try {
+    const { size, quantity } = req.body;
+
+    if (!size || quantity === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Beden ve miktar zorunludur'
+      });
+    }
+
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
+    }
+
+    // Beden stokunu bul ve güncelle
+    const sizeItem = product.sizeStock.find(s => s.size === size);
+
+    if (!sizeItem) {
+      return res.status(404).json({ success: false, message: 'Beden bulunamadı' });
+    }
+
+    sizeItem.stock += parseInt(quantity);
+
+    if (sizeItem.stock < 0) {
+      sizeItem.stock = 0;
+    }
+
+    await product.save();
+
+    res.json({
+      success: true,
+      message: `${size} bedeninin stoku güncellendi: ${sizeItem.stock}`,
+      product
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Stok güncelleme hatası: ' + error.message });
+  }
+});
+
+// Ürün sil
+router.delete('/api/products/:id', async (req, res) => {
+  try {
+    const product = await Product.findByIdAndDelete(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
+    }
+
+    res.json({
+      success: true,
+      message: `Ürün "${product.name}" başarıyla silindi`
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Silme hatası: ' + error.message });
+  }
+});
+
+// PDF Etiket (eski kod...)
 router.get('/api/products/:id/label-pdf', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -21,7 +149,6 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
     }
 
-    // PDF HTML olarak gönder (tarayıcıda render edilecek)
     const html = `
       <!DOCTYPE html>
       <html lang="tr">
@@ -122,128 +249,6 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
     res.send(html);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Etiket oluşturma hatası: ' + error.message });
-  }
-});
-
-// Yeni ürün ekle
-router.post('/api/products', async (req, res) => {
-  try {
-    const { name, price, category, stock, barcode, image, description } = req.body;
-
-    if (!name || !price || !category) {
-      return res.status(400).json({
-        success: false,
-        message: 'Ürün adı, fiyat ve kategori zorunludur'
-      });
-    }
-
-    const newProduct = new Product({
-      name,
-      price: parseFloat(price),
-      category,
-      stock: parseInt(stock) || 0,
-      barcode: barcode && barcode.trim() ? barcode.trim() : undefined,
-      image: image || undefined,
-      description: description || ''
-    });
-
-    await newProduct.save();
-
-    res.status(201).json({
-      success: true,
-      message: `Ürün "${name}" başarıyla eklendi. Barkod: ${newProduct.barcode}`,
-      product: newProduct
-    });
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: 'Bu barkod numarası zaten kullanılıyor'
-      });
-    }
-    res.status(500).json({
-      success: false,
-      message: 'Ürün eklenirken hata oluştu: ' + error.message
-    });
-  }
-});
-
-// Ürün güncelle
-router.put('/api/products/:id', async (req, res) => {
-  try {
-    const { name, price, category, stock, image, description } = req.body;
-    
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { name, price, category, stock, image, description },
-      { new: true, runValidators: true }
-    );
-
-    if (!product) {
-      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
-    }
-
-    res.json({
-      success: true,
-      message: 'Ürün başarıyla güncellendi',
-      product
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Güncelleme hatası: ' + error.message });
-  }
-});
-
-// Stok güncelle
-router.patch('/api/products/:id/stock', async (req, res) => {
-  try {
-    const { quantity } = req.body;
-    
-    if (quantity === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: 'Stok miktarı zorunludur'
-      });
-    }
-
-    const product = await Product.findById(req.params.id);
-    
-    if (!product) {
-      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
-    }
-
-    product.stock += parseInt(quantity);
-    
-    if (product.stock < 0) {
-      product.stock = 0;
-    }
-
-    await product.save();
-
-    res.json({
-      success: true,
-      message: `Stok güncellendi. Yeni Stok: ${product.stock}`,
-      product
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Stok güncelleme hatası: ' + error.message });
-  }
-});
-
-// Ürün sil
-router.delete('/api/products/:id', async (req, res) => {
-  try {
-    const product = await Product.findByIdAndDelete(req.params.id);
-
-    if (!product) {
-      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
-    }
-
-    res.json({
-      success: true,
-      message: `Ürün "${product.name}" başarıyla silindi`
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Silme hatası: ' + error.message });
   }
 });
 

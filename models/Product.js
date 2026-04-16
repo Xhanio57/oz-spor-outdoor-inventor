@@ -13,6 +13,26 @@ const generateUniqueBarcode = async () => {
   return barcode;
 };
 
+// Beden seçenekleri kategoriye göre
+const sizeOptions = {
+  'Judo Ürünleri': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  'Spor Giyim': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  'Kamp Ekipmanları': ['Tek Boyut'],
+  'Diğer': ['Tek Boyut']
+};
+
+const sizeStockSchema = new mongoose.Schema({
+  size: {
+    type: String,
+    required: true
+  },
+  stock: {
+    type: Number,
+    default: 0,
+    min: [0, 'Stok negatif olamaz']
+  }
+}, { _id: false });
+
 const productSchema = new mongoose.Schema(
   {
     name: {
@@ -27,11 +47,6 @@ const productSchema = new mongoose.Schema(
       sparse: true,
       trim: true
     },
-    stock: {
-      type: Number,
-      default: 0,
-      min: [0, 'Stok negatif olamaz']
-    },
     price: {
       type: Number,
       required: [true, 'Fiyat zorunludur'],
@@ -43,6 +58,9 @@ const productSchema = new mongoose.Schema(
       enum: ['Judo Ürünleri', 'Spor Giyim', 'Kamp Ekipmanları', 'Diğer'],
       default: 'Diğer'
     },
+    // Beden bazlı stok
+    sizeStock: [sizeStockSchema],
+    
     image: {
       type: String,
       default: '/images/default-product.png'
@@ -61,7 +79,22 @@ productSchema.pre('save', async function (next) {
   if (!this.barcode) {
     this.barcode = await generateUniqueBarcode();
   }
+  
+  // Eğer sizeStock boşsa, kategori için varsayılan bedenleri ekle
+  if (!this.sizeStock || this.sizeStock.length === 0) {
+    const defaultSizes = sizeOptions[this.category] || ['Tek Boyut'];
+    this.sizeStock = defaultSizes.map(size => ({
+      size,
+      stock: 0
+    }));
+  }
+  
   next();
+});
+
+// Toplam stoku hesapla
+productSchema.virtual('totalStock').get(function() {
+  return this.sizeStock.reduce((total, item) => total + item.stock, 0);
 });
 
 module.exports = mongoose.model('Product', productSchema);
