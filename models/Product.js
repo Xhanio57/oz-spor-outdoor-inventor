@@ -1,4 +1,11 @@
 const mongoose = require('mongoose');
+const {
+  CATEGORIES,
+  ALL_SIZES,
+  STANDARD_SIZE,
+  getSizesForCategory,
+  hasMultipleSizes
+} = require('../config/sizeConstants');
 
 const generateUniqueBarcode = async () => {
   let barcode;
@@ -40,8 +47,25 @@ const productSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, 'Kategori zorunludur'],
-      enum: ['Judo Ürünleri', 'Spor Giyim', 'Kamp Ekipmanları', 'Diğer'],
+      enum: CATEGORIES,
       default: 'Diğer'
+    },
+    size: {
+      type: String,
+      enum: ALL_SIZES,
+      required: [
+        function isSizeRequired() {
+          return hasMultipleSizes(this.category);
+        },
+        'Beden zorunludur'
+      ],
+      validate: {
+        validator: function validateSize(value) {
+          const validSizes = getSizesForCategory(this.category);
+          return validSizes.includes(value);
+        },
+        message: 'Seçilen beden kategori ile eşleşmiyor'
+      }
     },
     image: {
       type: String,
@@ -61,6 +85,11 @@ productSchema.pre('save', async function (next) {
   if (!this.barcode) {
     this.barcode = await generateUniqueBarcode();
   }
+
+  if (!hasMultipleSizes(this.category)) {
+    this.size = STANDARD_SIZE;
+  }
+
   next();
 });
 

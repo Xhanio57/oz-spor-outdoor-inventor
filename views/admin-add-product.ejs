@@ -35,11 +35,18 @@
           <label for="productCategory">Kategori *</label>
           <select id="productCategory" name="category" required>
             <option value="">-- Kategori Seçin --</option>
-            <option value="Judo Ürünleri">Judo Ürünleri</option>
+            <option value="Judogi">Judogi</option>
+            <option value="Ayakkabı">Ayakkabı</option>
             <option value="Spor Giyim">Spor Giyim</option>
-            <option value="Kamp Ekipmanları">Kamp Ekipmanları</option>
+            <option value="Kamp Malzemeleri">Kamp Malzemeleri</option>
+            <option value="Aksesuarlar">Aksesuarlar</option>
             <option value="Diğer">Diğer</option>
           </select>
+        </div>
+
+        <div class="form-group" id="sizeGroup" style="display:none;">
+          <label for="productSize">Beden *</label>
+          <select id="productSize" name="size"></select>
         </div>
 
         <div class="form-group">
@@ -93,14 +100,68 @@
     <script>
       const form = document.getElementById('addProductForm');
       const notification = document.getElementById('notification');
+      const categorySelect = document.getElementById('productCategory');
+      const sizeGroup = document.getElementById('sizeGroup');
+      const sizeSelect = document.getElementById('productSize');
+      let isSizeSelectionRequired = false;
+
+      function resetSizeSelect() {
+        sizeSelect.innerHTML = '<option value="">-- Beden Seçin --</option>';
+      }
+
+      categorySelect.addEventListener('change', async (e) => {
+        const category = e.target.value;
+        resetSizeSelect();
+
+        if (!category) {
+          isSizeSelectionRequired = false;
+          sizeGroup.style.display = 'none';
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/sizes/${encodeURIComponent(category)}`);
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Bedenler yüklenemedi');
+          }
+
+          const onlyStandard = data.sizes.length === 1 && data.sizes[0] === 'Standart';
+          if (onlyStandard) {
+            isSizeSelectionRequired = false;
+            sizeGroup.style.display = 'none';
+            return;
+          }
+
+          data.sizes.forEach((size) => {
+            const option = document.createElement('option');
+            option.value = size;
+            option.textContent = size;
+            sizeSelect.appendChild(option);
+          });
+          isSizeSelectionRequired = true;
+          sizeGroup.style.display = 'block';
+        } catch (error) {
+          isSizeSelectionRequired = false;
+          sizeGroup.style.display = 'none';
+          showNotification(error.message, 'error');
+        }
+      });
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        if (isSizeSelectionRequired && !sizeSelect.value) {
+          showNotification('Lütfen beden seçin', 'error');
+          return;
+        }
 
         const formData = {
           name: document.getElementById('productName').value,
           price: parseFloat(document.getElementById('productPrice').value),
           category: document.getElementById('productCategory').value,
+          size: isSizeSelectionRequired ? sizeSelect.value : 'Standart',
           stock: parseInt(document.getElementById('productStock').value) || 0,
           image: document.getElementById('productImage').value.trim() || undefined,
           description: document.getElementById('productDescription').value.trim() || '',
@@ -121,6 +182,9 @@
           if (data.success) {
             showNotification(data.message, 'success');
             form.reset();
+            resetSizeSelect();
+            isSizeSelectionRequired = false;
+            sizeGroup.style.display = 'none';
           } else {
             showNotification(data.message, 'error');
           }

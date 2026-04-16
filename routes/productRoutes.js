@@ -1,6 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
+const {
+  CATEGORIES,
+  STANDARD_SIZE,
+  getSizesForCategory,
+  hasMultipleSizes
+} = require('../config/sizeConstants');
 
 // Tüm ürünleri listele
 router.get('/api/products', async (req, res) => {
@@ -128,7 +134,7 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
 // Yeni ürün ekle
 router.post('/api/products', async (req, res) => {
   try {
-    const { name, price, category, stock, barcode, image, description } = req.body;
+    const { name, price, category, size, stock, barcode, image, description } = req.body;
 
     if (!name || !price || !category) {
       return res.status(400).json({
@@ -137,10 +143,28 @@ router.post('/api/products', async (req, res) => {
       });
     }
 
+    if (!CATEGORIES.includes(category)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Geçersiz kategori'
+      });
+    }
+
+    const validSizes = getSizesForCategory(category);
+    const resolvedSize = hasMultipleSizes(category) ? size : STANDARD_SIZE;
+
+    if (!resolvedSize || !validSizes.includes(resolvedSize)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Seçilen beden kategori ile eşleşmiyor'
+      });
+    }
+
     const newProduct = new Product({
       name,
       price: parseFloat(price),
       category,
+      size: resolvedSize,
       stock: parseInt(stock) || 0,
       barcode: barcode && barcode.trim() ? barcode.trim() : undefined,
       image: image || undefined,
@@ -166,6 +190,29 @@ router.post('/api/products', async (req, res) => {
       message: 'Ürün eklenirken hata oluştu: ' + error.message
     });
   }
+});
+
+router.get('/api/sizes/:category', (req, res) => {
+  const category = req.params.category;
+
+  if (!CATEGORIES.includes(category)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Geçersiz kategori'
+    });
+  }
+
+  res.json({
+    success: true,
+    sizes: getSizesForCategory(category)
+  });
+});
+
+router.get('/api/categories', (req, res) => {
+  res.json({
+    success: true,
+    categories: CATEGORIES
+  });
 });
 
 // Ürün güncelle
