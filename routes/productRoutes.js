@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
+const PDFDocument = require('pdfkit');
 
 router.get('/api/products', async (req, res) => {
   try {
@@ -131,6 +132,87 @@ router.delete('/api/products/:id', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Silme hatası: ' + error.message });
+  }
+});
+
+// PDF İndir - Tüm Ürünleri
+router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
+  try {
+    const products = await Product.find().sort({ name: 1 });
+    const includeStock = req.params.includeStock === 'true';
+
+    const doc = new PDFDocument();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="urunler.pdf"');
+    doc.pipe(res);
+
+    // Başlık
+    doc.fontSize(20).font('Helvetica-Bold').text('Öz Spor & Outdoor', { align: 'center' });
+    doc.fontSize(12).font('Helvetica').text('Ürün Envanteri', { align: 'center' });
+    doc.fontSize(10).text(`Tarih: ${new Date().toLocaleDateString('tr-TR')}`, { align: 'center' });
+    doc.moveTo(50, doc.y + 10).lineTo(550, doc.y + 10).stroke();
+    doc.moveDown();
+
+    // Kategoriye göre grupla
+    const categories = {};
+    products.forEach(p => {
+      if (!categories[p.category]) {
+        categories[p.category] = [];
+      }
+      categories[p.category].push(p);
+    });
+
+    // Her kategorisi için
+    Object.keys(categories).forEach(cat => {
+      doc.fontSize(14).font('Helvetica-Bold').text(cat, { underline: true });
+      doc.moveDown(0.3);
+
+      categories[cat].forEach(p => {
+        const totalStock = p.sizeStock.reduce((a, b) => a + b.stock, 0);
+
+        doc.fontSize(11).font('Helvetica-Bold').text(p.name);
+        doc.fontSize(10).font('Helvetica')
+          .text(`Barkod: ${p.barcode}`)
+          .text(`Fiyat: ${p.price.toFixed(2)} ₺`);
+
+        if (includeStock) {
+          doc.text(`Toplam Stok: ${totalStock}`, { color: totalStock === 0 ? '#dc2626' : '#2563eb' });
+          
+          if (p.sizeStock.length > 1 || p.sizeStock[0].size !== 'Tek Boyut') {
+            doc.fontSize(9).font('Helvetica').text('Beden Detayları:');
+            p.sizeStock.forEach(s => {
+              const color = s.stock === 0 ? '#dc2626' : s.stock < 5 ? '#f59e0b' : '#10b981';
+              doc.fontSize(8).text(`  ${s.size}: ${s.stock} adet`, { color: color });
+            });
+          }
+        }
+
+        if (p.description) {
+          doc.fontSize(9).font('Helvetica-Oblique').text(`Not: ${p.description}`);
+        }
+
+        doc.moveDown(0.5);
+      });
+
+      doc.moveTo(50, doc.y + 5).lineTo(550, doc.y + 5).stroke();
+      doc.moveDown();
+    });
+
+    // Özet
+    doc.moveDown();
+    doc.fontSize(11).font('Helvetica-Bold').text('Özet:');
+    doc.fontSize(10).font('Helvetica')
+      .text(`Toplam Ürün: ${products.length}`)
+      .text(`Toplam Kategori: ${Object.keys(categories).length}`);
+
+    if (includeStock) {
+      const totalStock = products.reduce((a, p) => a + p.sizeStock.reduce((b, c) => b + c.stock, 0), 0);
+      doc.text(`Toplam Stok: ${totalStock}`);
+    }
+
+    doc.end();
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'PDF oluşturma hatası: ' + error.message });
   }
 });
 
