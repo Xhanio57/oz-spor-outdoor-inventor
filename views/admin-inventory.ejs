@@ -1,4 +1,241 @@
 <%- include('layout', { 
     title: 'Stok Listesi',
-    body: `<div class="admin-panel"><h2>Stok Listesi</h2><table class="inventory-table"><thead><tr><th>Resim</th><th>Ürün</th><th>Kategori</th><th>Barkod</th><th>Stok</th><th>Fiyat</th><th>İşlem</th></tr></thead><tbody id="tbody"></tbody></table></div><div id="m1" class="modal hidden"><div class="modal-content"><span class="close" onclick="document.getElementById('m1').classList.add('hidden')">&times;</span><h3>Stok Ekle</h3><input type="number" id="q" min="1"><button onclick="addS()" class="btn btn-primary">Ekle</button></div></div><div id="m2" class="modal hidden"><div class="modal-content"><span class="close" onclick="document.getElementById('m2').classList.add('hidden')">&times;</span><h3>Düzenle</h3><input type="text" id="n"><input type="number" id="pr" step="0.01"><select id="c"><option>Judo Ürünleri</option><option>Spor Giyim</option><option>Kamp Ekipmanları</option><option>Diğer</option></select><input type="number" id="s"><button onclick="editS()" class="btn btn-primary">Kaydet</button></div></div><div id="m3" class="modal hidden"><div class="modal-content"><span class="close" onclick="document.getElementById('m3').classList.add('hidden')">&times;</span><h3>Etiket</h3><input type="number" id="qty" min="1" max="100" value="6"><button onclick="labelS()" class="btn btn-primary">Yazdır</button></div></div><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script><script>let prods=[],cid=null,cp=null;async function load(){const r=await fetch('/api/products');prods=await r.json();render()}function render(){const t=document.getElementById('tbody');t.innerHTML=prods.map(x=>'<tr><td><img src="'+x.image+'" style="width:50px;height:50px;object-fit:cover" onerror="this.src=\\'/images/default-product.svg\\'"><\/td><td>'+x.name+'<\/td><td>'+x.category+'<\/td><td>'+x.barcode+'<\/td><td>'+x.stock+'<\/td><td>'+x.price.toFixed(2)+' ₺<\/td><td><button onclick="os(\\' '+x._id+' \\')" class="btn btn-small">➕<\/button><button onclick="oe(\\' '+x._id+' \\')" class="btn btn-small">✏️<\/button><button onclick="ol(\\' '+x._id+' \\')" class="btn btn-small">🏷️<\/button><button onclick="del(\\' '+x._id+' \\')" class="btn btn-small btn-danger">🗑️<\/button><\/td><\/tr>').join('')}function os(id){cid=id;document.getElementById('m1').classList.remove('hidden')}async function addS(){const q=parseInt(document.getElementById('q').value);if(!q)return;await fetch('/api/products/'+cid+'/stock',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({quantity:q})});document.getElementById('m1').classList.add('hidden');load()}function oe(id){cid=id;const x=prods.find(z=>z._id===id);document.getElementById('n').value=x.name;document.getElementById('pr').value=x.price;document.getElementById('c').value=x.category;document.getElementById('s').value=x.stock;document.getElementById('m2').classList.remove('hidden')}async function editS(){await fetch('/api/products/'+cid,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('n').value,price:parseFloat(document.getElementById('pr').value),category:document.getElementById('c').value,stock:parseInt(document.getElementById('s').value)})});document.getElementById('m2').classList.add('hidden');load()}function ol(id){cid=id;cp=prods.find(z=>z._id===id);document.getElementById('m3').classList.remove('hidden')}function labelS(){const q=parseInt(document.getElementById('qty').value);if(!q||q<1||q>100)return;const p=cp;let html='<!DOCTYPE html><html><head><meta charset=UTF-8><script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script><style>body{margin:5mm}div{display:grid;grid-template-columns:repeat(4,50mm);gap:5mm}.l{width:50mm;height:75mm;border:1px solid #ddd;padding:3mm;display:flex;flex-direction:column;gap:2mm}img{width:100%;height:25mm;object-fit:cover}h4{margin:0;font-size:10px}p{margin:0;font-size:8px}svg{width:100%;height:18mm}</style></head><body><div>';for(let i=0;i<q;i++){html+='<div class=l><img src="'+p.image+'" onerror="this.src=\\'/images/default-product.svg\\'"><h4>'+p.name.substring(0,15)+'<\/h4><p>'+p.category+'<\/p><p style=font-weight:bold>'+p.price.toFixed(2)+' ₺<\/p><svg id=b'+i+'><\/svg><p style=text-align:center>'+p.barcode+'<\/p><\/div>'}html+='<\/div><script>for(let i=0;i<'+q+';i++){JsBarcode("#b"+i,"'+p.barcode+'",{format:"CODE128",width:1,height:18});} setTimeout(()=>window.print(),500);<\/script><\/body><\/html>';const w=window.open();w.document.write(html);w.document.close();document.getElementById('m3').classList.add('hidden')}async function del(id){if(!confirm('Sil?'))return;await fetch('/api/products/'+id,{method:'DELETE'});load()}load()<\/script>` 
+    body: `
+      <div class="admin-panel">
+        <h2>Stok Listesi</h2>
+        <button onclick="document.getElementById('m1').classList.remove('hidden')" class="btn btn-primary">➕ Stok Ekle</button>
+        <table class="inventory-table">
+          <thead>
+            <tr>
+              <th>Resim</th>
+              <th>Ürün</th>
+              <th>Kategori</th>
+              <th>Barkod</th>
+              <th>Stok</th>
+              <th>Fiyat</th>
+              <th>İşlem</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+  
+      <!-- Modal: Stok Ekle -->
+      <div id="m1" class="modal hidden">
+        <div class="modal-content">
+          <span class="close" onclick="document.getElementById('m1').classList.add('hidden')">&times;</span>
+          <h3>Stok Ekle</h3>
+          <input type="number" id="q" min="1" placeholder="Miktar">
+          <button onclick="addS()" class="btn btn-primary">Ekle</button>
+        </div>
+      </div>
+  
+      <!-- Modal: Düzenle -->
+      <div id="m2" class="modal hidden">
+        <div class="modal-content">
+          <span class="close" onclick="document.getElementById('m2').classList.add('hidden')">&times;</span>
+          <h3>Ürün Düzenle</h3>
+          <input type="text" id="n" placeholder="Ürün Adı">
+          <input type="number" id="pr" step="0.01" placeholder="Fiyat">
+          <select id="c">
+            <option>Judo Ürünleri</option>
+            <option>Spor Giyim</option>
+            <option>Kamp Ekipmanları</option>
+            <option>Diğer</option>
+          </select>
+          <input type="number" id="s" placeholder="Stok Miktarı">
+          <button onclick="editS()" class="btn btn-primary">Kaydet</button>
+        </div>
+      </div>
+  
+      <!-- Modal: Etiket Yazdır -->
+      <div id="m3" class="modal hidden">
+        <div class="modal-content">
+          <span class="close" onclick="document.getElementById('m3').classList.add('hidden')">&times;</span>
+          <h3>Etiket Yazdır</h3>
+          <input type="number" id="qty" min="1" max="100" value="6" placeholder="Kaç adet?">
+          <button onclick="labelS()" class="btn btn-primary">Yazdır</button>
+        </div>
+      </div>
+  
+      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+      <script>
+        let prods = [];
+        let cid = null;
+        let cp = null;
+  
+        async function load() {
+          try {
+            const response = await fetch('/api/products');
+            if (!response.ok) throw new Error('API hatası');
+            prods = await response.json();
+            render();
+          } catch (error) {
+            console.error('Veri yükleme hatası:', error);
+            alert('Ürünler yüklenemedi');
+          }
+        }
+  
+        function render() {
+          const tbody = document.getElementById('tbody');
+          if (!prods || prods.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Ürün bulunamadı</td></tr>';
+            return;
+          }
+  
+          tbody.innerHTML = prods.map(product => {
+            const imgSrc = product.image && product.image.startsWith('http') 
+              ? product.image 
+              : '/images/default-product.svg';
+            
+            return '<tr>' +
+              '<td><img src="' + imgSrc + '" style="width:50px;height:50px;object-fit:cover;" onerror="this.src=\'/images/default-product.svg\'"></td>' +
+              '<td>' + (product.name || 'N/A') + '</td>' +
+              '<td>' + (product.category || 'N/A') + '</td>' +
+              '<td>' + (product.barcode || 'N/A') + '</td>' +
+              '<td>' + (product.stock || 0) + '</td>' +
+              '<td>' + (parseFloat(product.price) || 0).toFixed(2) + ' ₺</td>' +
+              '<td>' +
+                '<button onclick="os(\'' + product._id + '\')" class="btn btn-small">➕</button> ' +
+                '<button onclick="oe(\'' + product._id + '\')" class="btn btn-small">✏️</button> ' +
+                '<button onclick="ol(\'' + product._id + '\')" class="btn btn-small">🏷️</button> ' +
+                '<button onclick="del(\'' + product._id + '\')" class="btn btn-small btn-danger">🗑️</button>' +
+              '</td>' +
+              '</tr>';
+          }).join('');
+        }
+  
+        function os(id) {
+          cid = id;
+          document.getElementById('m1').classList.remove('hidden');
+        }
+  
+        async function addS() {
+          const quantity = parseInt(document.getElementById('q').value);
+          if (!quantity || quantity < 1) {
+            alert('Geçerli bir miktar girin');
+            return;
+          }
+          try {
+            const response = await fetch('/api/products/' + cid + '/stock', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ quantity: quantity })
+            });
+            if (response.ok) {
+              document.getElementById('m1').classList.add('hidden');
+              document.getElementById('q').value = '';
+              load();
+            }
+          } catch (error) {
+            console.error('Stok ekleme hatası:', error);
+          }
+        }
+  
+        function oe(id) {
+          cid = id;
+          const product = prods.find(p => p._id === id);
+          if (!product) return;
+          document.getElementById('n').value = product.name || '';
+          document.getElementById('pr').value = product.price || 0;
+          document.getElementById('c').value = product.category || '';
+          document.getElementById('s').value = product.stock || 0;
+          document.getElementById('m2').classList.remove('hidden');
+        }
+  
+        async function editS() {
+          try {
+            const response = await fetch('/api/products/' + cid, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: document.getElementById('n').value,
+                price: parseFloat(document.getElementById('pr').value),
+                category: document.getElementById('c').value,
+                stock: parseInt(document.getElementById('s').value)
+              })
+            });
+            if (response.ok) {
+              document.getElementById('m2').classList.add('hidden');
+              load();
+            }
+          } catch (error) {
+            console.error('Düzenleme hatası:', error);
+          }
+        }
+  
+        function ol(id) {
+          cid = id;
+          cp = prods.find(p => p._id === id);
+          if (!cp) return;
+          document.getElementById('m3').classList.remove('hidden');
+        }
+  
+        function labelS() {
+          const quantity = parseInt(document.getElementById('qty').value);
+          if (!quantity || quantity < 1 || quantity > 100 || !cp) {
+            alert('Geçerli bir miktar girin (1-100)');
+            return;
+          }
+  
+          let html = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+            '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>' +
+            '<style>' +
+            'body { margin: 5mm; } ' +
+            'div { display: grid; grid-template-columns: repeat(4, 50mm); gap: 5mm; } ' +
+            '.label { width: 50mm; height: 75mm; border: 1px solid #ddd; padding: 3mm; display: flex; flex-direction: column; gap: 2mm; } ' +
+            'img { width: 100%; height: 25mm; object-fit: cover; } ' +
+            'h4 { margin: 0; font-size: 10px; } ' +
+            'p { margin: 0; font-size: 8px; } ' +
+            'svg { width: 100%; height: 18mm; }' +
+            '</style></head><body><div>';
+  
+          const imgSrc = cp.image && cp.image.startsWith('http') 
+            ? cp.image 
+            : '/images/default-product.svg';
+  
+          for (let i = 0; i < quantity; i++) {
+            html += '<div class="label">' +
+              '<img src="' + imgSrc + '" onerror="this.src=\'/images/default-product.svg\'">' +
+              '<h4>' + cp.name.substring(0, 15) + '</h4>' +
+              '<p>' + cp.category + '</p>' +
+              '<p style="font-weight: bold;">' + parseFloat(cp.price).toFixed(2) + ' ₺</p>' +
+              '<svg id="barcode' + i + '"><\/svg>' +
+              '<p style="text-align: center; font-size: 7px;">' + cp.barcode + '</p>' +
+              '</div>';
+          }
+  
+          html += '</div>' +
+            '<script>' +
+            'for (let i = 0; i < ' + quantity + '; i++) {' +
+            '  JsBarcode("#barcode" + i, "' + cp.barcode + '", {format: "CODE128", width: 1, height: 18});' +
+            '}' +
+            'setTimeout(() => window.print(), 500);' +
+            '<\/script>' +
+            '</body></html>';
+  
+          const printWindow = window.open();
+          printWindow.document.write(html);
+          printWindow.document.close();
+          document.getElementById('m3').classList.add('hidden');
+        }
+  
+        async function del(id) {
+          if (!confirm('Bu ürünü silmek istediğinize emin misiniz?')) return;
+          try {
+            const response = await fetch('/api/products/' + id, {
+              method: 'DELETE'
+            });
+            if (response.ok) {
+              load();
+            }
+          } catch (error) {
+            console.error('Silme hatası:', error);
+          }
+        }
+  
+        // Sayfa yüklendiğinde ürünleri getir
+        load();
+      <\/script>
+    ` 
   }) %>
