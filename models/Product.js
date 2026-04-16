@@ -13,24 +13,9 @@ const generateUniqueBarcode = async () => {
   return barcode;
 };
 
-// Beden seçenekleri kategoriye göre
-const sizeOptions = {
-  'Judo Ürünleri': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
-  'Spor Giyim': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
-  'Kamp Ekipmanları': ['Tek Boyut'],
-  'Diğer': ['Tek Boyut']
-};
-
 const sizeStockSchema = new mongoose.Schema({
-  size: {
-    type: String,
-    required: true
-  },
-  stock: {
-    type: Number,
-    default: 0,
-    min: [0, 'Stok negatif olamaz']
-  }
+  size: String,
+  stock: { type: Number, default: 0, min: 0 }
 }, { _id: false });
 
 const productSchema = new mongoose.Schema(
@@ -55,12 +40,10 @@ const productSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, 'Kategori zorunludur'],
-      enum: ['Judo Ürünleri', 'Spor Giyim', 'Kamp Ekipmanları', 'Diğer'],
+      enum: ['Spor Giyim', 'Judogi', 'Kamp Malzemeleri', 'Ayakkabı', 'Aksesuarlar', 'Diğer'],
       default: 'Diğer'
     },
-    // Beden bazlı stok
     sizeStock: [sizeStockSchema],
-    
     image: {
       type: String,
       default: '/images/default-product.png'
@@ -80,10 +63,17 @@ productSchema.pre('save', async function (next) {
     this.barcode = await generateUniqueBarcode();
   }
   
-  // Eğer sizeStock boşsa, kategori için varsayılan bedenleri ekle
   if (!this.sizeStock || this.sizeStock.length === 0) {
-    const defaultSizes = sizeOptions[this.category] || ['Tek Boyut'];
-    this.sizeStock = defaultSizes.map(size => ({
+    const sizes = {
+      'Judogi': Array.from({length: 11}, (_, i) => (100 + i * 10).toString() + 'cm'),
+      'Ayakkabı': Array.from({length: 11}, (_, i) => (36 + i).toString()),
+      'Spor Giyim': ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '4XL', '5XL'],
+      'Kamp Malzemeleri': ['Tek Boyut'],
+      'Aksesuarlar': ['Tek Boyut'],
+      'Diğer': ['Tek Boyut']
+    };
+    
+    this.sizeStock = (sizes[this.category] || ['Tek Boyut']).map(size => ({
       size,
       stock: 0
     }));
@@ -92,7 +82,6 @@ productSchema.pre('save', async function (next) {
   next();
 });
 
-// Toplam stoku hesapla
 productSchema.virtual('totalStock').get(function() {
   return this.sizeStock.reduce((total, item) => total + item.stock, 0);
 });

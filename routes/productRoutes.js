@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
 
-// Tüm ürünleri listele
 router.get('/api/products', async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
@@ -12,7 +11,6 @@ router.get('/api/products', async (req, res) => {
   }
 });
 
-// Yeni ürün ekle (beden seçenekleriyle)
 router.post('/api/products', async (req, res) => {
   try {
     const { name, price, category, barcode, image, description } = req.body;
@@ -54,7 +52,6 @@ router.post('/api/products', async (req, res) => {
   }
 });
 
-// Ürün güncelle
 router.put('/api/products/:id', async (req, res) => {
   try {
     const { name, price, category, image, description } = req.body;
@@ -79,7 +76,6 @@ router.put('/api/products/:id', async (req, res) => {
   }
 });
 
-// Beden bazlı stok güncelle (NEW)
 router.patch('/api/products/:id/size-stock', async (req, res) => {
   try {
     const { size, quantity } = req.body;
@@ -97,7 +93,6 @@ router.patch('/api/products/:id/size-stock', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
     }
 
-    // Beden stokunu bul ve güncelle
     const sizeItem = product.sizeStock.find(s => s.size === size);
 
     if (!sizeItem) {
@@ -122,7 +117,6 @@ router.patch('/api/products/:id/size-stock', async (req, res) => {
   }
 });
 
-// Ürün sil
 router.delete('/api/products/:id', async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
@@ -140,7 +134,6 @@ router.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// PDF Etiket (eski kod...)
 router.get('/api/products/:id/label-pdf', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
