@@ -47,7 +47,6 @@
         <div class="form-group" id="sizeGroup" style="display:none;">
           <label for="productSize">Beden *</label>
           <select id="productSize" name="size"></select>
-          <small id="sizeMessage">Bu kategori için beden seçeneği yoktur.</small>
         </div>
 
         <div class="form-group">
@@ -104,7 +103,7 @@
       const categorySelect = document.getElementById('productCategory');
       const sizeGroup = document.getElementById('sizeGroup');
       const sizeSelect = document.getElementById('productSize');
-      const sizeMessage = document.getElementById('sizeMessage');
+      let isSizeSelectionRequired = false;
 
       function resetSizeSelect() {
         sizeSelect.innerHTML = '<option value="">-- Beden Seçin --</option>';
@@ -115,12 +114,13 @@
         resetSizeSelect();
 
         if (!category) {
+          isSizeSelectionRequired = false;
           sizeGroup.style.display = 'none';
           return;
         }
 
         try {
-          const response = await fetch('/api/sizes/' + encodeURIComponent(category));
+          const response = await fetch(`/api/sizes/${encodeURIComponent(category)}`);
           const data = await response.json();
 
           if (!response.ok || !data.success) {
@@ -129,8 +129,8 @@
 
           const onlyStandard = data.sizes.length === 1 && data.sizes[0] === 'Standart';
           if (onlyStandard) {
+            isSizeSelectionRequired = false;
             sizeGroup.style.display = 'none';
-            sizeMessage.textContent = 'Bu kategori için beden seçeneği yoktur.';
             return;
           }
 
@@ -140,9 +140,10 @@
             option.textContent = size;
             sizeSelect.appendChild(option);
           });
-          sizeMessage.textContent = '';
+          isSizeSelectionRequired = true;
           sizeGroup.style.display = 'block';
         } catch (error) {
+          isSizeSelectionRequired = false;
           sizeGroup.style.display = 'none';
           showNotification(error.message, 'error');
         }
@@ -151,7 +152,7 @@
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        if (sizeGroup.style.display !== 'none' && !sizeSelect.value) {
+        if (isSizeSelectionRequired && !sizeSelect.value) {
           showNotification('Lütfen beden seçin', 'error');
           return;
         }
@@ -160,7 +161,7 @@
           name: document.getElementById('productName').value,
           price: parseFloat(document.getElementById('productPrice').value),
           category: document.getElementById('productCategory').value,
-          size: sizeGroup.style.display === 'none' ? 'Standart' : sizeSelect.value,
+          size: isSizeSelectionRequired ? sizeSelect.value : 'Standart',
           stock: parseInt(document.getElementById('productStock').value) || 0,
           image: document.getElementById('productImage').value.trim() || undefined,
           description: document.getElementById('productDescription').value.trim() || '',
@@ -182,6 +183,7 @@
             showNotification(data.message, 'success');
             form.reset();
             resetSizeSelect();
+            isSizeSelectionRequired = false;
             sizeGroup.style.display = 'none';
           } else {
             showNotification(data.message, 'error');

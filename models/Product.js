@@ -54,7 +54,7 @@ const productSchema = new mongoose.Schema(
       type: String,
       enum: ALL_SIZES,
       required: [
-        function requiredSize() {
+        function isSizeRequired() {
           return hasMultipleSizes(this.category);
         },
         'Beden zorunludur'

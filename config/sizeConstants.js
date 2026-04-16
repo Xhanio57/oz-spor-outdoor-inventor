@@ -1,8 +1,16 @@
 const STANDARD_SIZE = 'Standart';
+const JUDOGI_START_CM = 100;
+const JUDOGI_END_CM = 200;
+const JUDOGI_STEP_CM = 10;
+const SHOE_START = 36;
+const SHOE_END = 46;
 
 const CATEGORY_SIZE_MAP = {
-  Judogi: Array.from({ length: 11 }, (_, i) => `${100 + i * 10}cm`),
-  Ayakkabı: Array.from({ length: 11 }, (_, i) => `${36 + i}`),
+  Judogi: Array.from(
+    { length: ((JUDOGI_END_CM - JUDOGI_START_CM) / JUDOGI_STEP_CM) + 1 },
+    (_, i) => `${JUDOGI_START_CM + i * JUDOGI_STEP_CM}cm`
+  ),
+  Ayakkabı: Array.from({ length: (SHOE_END - SHOE_START) + 1 }, (_, i) => `${SHOE_START + i}`),
   'Spor Giyim': ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'],
   'Kamp Malzemeleri': [STANDARD_SIZE],
   Aksesuarlar: [STANDARD_SIZE],
