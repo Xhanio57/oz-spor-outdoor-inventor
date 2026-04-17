@@ -141,13 +141,22 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
     const products = await Product.find().sort({ name: 1 });
     const includeStock = req.params.includeStock === 'true';
 
-    const doc = new PDFDocument({ size: 'A4', margin: 20, layout: 'landscape' });
+    const doc = new PDFDocument({ 
+      size: 'A4', 
+      margin: 20, 
+      layout: 'landscape',
+      bufferPages: true
+    });
+
+    // Türkçe font desteği
+    doc.registerFont('Turkish', require('path').join(__dirname, '../fonts/times-roman.ttf'));
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="urunler.pdf"');
     doc.pipe(res);
 
     // Başlık
-    doc.fontSize(16).font('Helvetica-Bold').text('Öz Spor & Outdoor - Stok Envanteri', { align: 'center' });
+    doc.fontSize(16).font('Helvetica-Bold').text('Oz Spor & Outdoor - Stok Envanteri', { align: 'center' });
     doc.fontSize(10).font('Helvetica').text(`Tarih: ${new Date().toLocaleDateString('tr-TR')} ${new Date().toLocaleTimeString('tr-TR')}`, { align: 'center' });
     doc.moveDown(0.5);
 
@@ -174,7 +183,7 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
     let x = 20;
     doc.text('S.N', x, headerY + 5, { width: colWidths.sn });
     x += colWidths.sn;
-    doc.text('Ürün Adı', x, headerY + 5, { width: colWidths.ad });
+    doc.text('Urun Adi', x, headerY + 5, { width: colWidths.ad });
     x += colWidths.ad;
     doc.text('Kategori', x, headerY + 5, { width: colWidths.kategori });
     x += colWidths.kategori;
@@ -186,7 +195,7 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
     x += colWidths.toplam;
     doc.text('Potansiyel Ciro', x, headerY + 5, { width: colWidths.ciro });
     x += colWidths.ciro;
-    doc.text('Beden Detayları', x, headerY + 5, { width: colWidths.bedenleri });
+    doc.text('Beden Detaylari', x, headerY + 5, { width: colWidths.bedenleri });
 
     let rowY = headerY + 25;
     let sn = 1;
@@ -235,7 +244,7 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
       x += colWidths.kategori;
       doc.text(p.barcode, x, rowY + 2, { width: colWidths.barkod, align: 'center' });
       x += colWidths.barkod;
-      doc.text(p.price.toFixed(2) + ' ₺', x, rowY + 2, { width: colWidths.fiyat, align: 'right' });
+      doc.text(p.price.toFixed(2) + ' TL', x, rowY + 2, { width: colWidths.fiyat, align: 'right' });
       x += colWidths.fiyat;
 
       const stockColor = prodTotalStock === 0 ? '#dc2626' : prodTotalStock < 10 ? '#f59e0b' : '#10b981';
@@ -243,7 +252,7 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
       doc.fillColor('black');
       x += colWidths.toplam;
 
-      doc.text(prodRevenue.toFixed(2) + ' ₺', x, rowY + 2, { width: colWidths.ciro, align: 'right' });
+      doc.text(prodRevenue.toFixed(2) + ' TL', x, rowY + 2, { width: colWidths.ciro, align: 'right' });
       x += colWidths.ciro;
       doc.text(sizeDetails, x, rowY + 2, { width: colWidths.bedenleri, fontSize: 7 });
 
@@ -260,27 +269,28 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
     doc.fillColor('black').font('Helvetica-Bold').fontSize(11);
 
     const summaryY = doc.y + 10;
-    doc.text('ÖZET', 30, summaryY);
+    doc.text('OZET', 30, summaryY);
 
     doc.font('Helvetica').fontSize(10);
     const summaryStartY = summaryY + 20;
-    doc.text(`Toplam Ürün: ${products.length}`, 30, summaryStartY);
+    doc.text(`Toplam Urun: ${products.length}`, 30, summaryStartY);
     doc.text(`Toplam Kategori: ${new Set(products.map(p => p.category)).size}`, 250, summaryStartY);
     doc.text(`Toplam Stok: ${totalStock} adet`, 30, summaryStartY + 20);
-    doc.text(`Toplam Potansiyel Ciro: ${totalRevenue.toFixed(2)} ₺`, 250, summaryStartY + 20);
+    doc.text(`Toplam Potansiyel Ciro: ${totalRevenue.toFixed(2)} TL`, 250, summaryStartY + 20);
 
     doc.end();
   } catch (error) {
-    res.status(500).json({ success: false, message: 'PDF oluşturma hatası: ' + error.message });
+    res.status(500).json({ success: false, message: 'PDF olusturma hatasi: ' + error.message });
   }
 });
 
+// Etiket PDF - A4'e sığan 6cm x 4cm - HTML ile barkod
 router.get('/api/products/:id/label-pdf', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
+      return res.status(404).json({ success: false, message: 'Urun bulunamadi' });
     }
 
     const html = `
@@ -289,90 +299,149 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
       <head>
         <meta charset="UTF-8">
         <title>${product.name} - Etiket</title>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+          body { 
+            font-family: Arial, sans-serif; 
+            background: #f5f5f5; 
+            padding: 5mm;
+            margin: 0;
+          }
+          .labels-container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5mm;
+            padding: 5mm;
+          }
           .label {
-            width: 80mm;
-            height: 120mm;
+            width: 40mm;
+            height: 60mm;
             background: white;
-            padding: 10mm;
-            margin: 0 auto;
             border: 1px solid #ddd;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            page-break-after: always;
+            padding: 2mm;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 2mm;
+            box-sizing: border-box;
+            page-break-inside: avoid;
           }
           .label-image {
             width: 100%;
-            height: 50mm;
+            height: 20mm;
             object-fit: cover;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-          }
-          .label-info {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
+            border: 0.5px solid #ddd;
+            border-radius: 2px;
           }
           .label-name {
-            font-size: 14px;
+            font-size: 8px;
             font-weight: bold;
             color: #333;
-            line-height: 1.2;
+            line-height: 1.1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
           }
           .label-category {
-            font-size: 11px;
+            font-size: 6px;
             color: #666;
           }
           .label-price {
-            font-size: 16px;
+            font-size: 9px;
             font-weight: bold;
             color: #2563eb;
+            text-align: center;
           }
           .label-barcode-img {
             width: 100%;
-            height: 50px;
-            object-fit: contain;
-            margin: 5px 0;
+            height: 12mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .label-barcode-img svg {
+            width: 100%;
+            height: 100%;
           }
           .label-barcode-text {
-            font-size: 10px;
+            font-size: 6px;
             text-align: center;
             font-family: 'Courier New', monospace;
             color: #333;
+            font-weight: bold;
           }
           @media print {
-            body { background: white; padding: 0; }
-            .label { margin: 0; }
+            body { background: white; padding: 0; margin: 0; }
+            .labels-container { gap: 0; padding: 0; }
+            .label { border: 0.5px solid #cccccc; }
           }
         </style>
-        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
       </head>
       <body>
-        <div class="label">
-          <img src="${product.image}" alt="${product.name}" class="label-image" onerror="this.src='/images/default-product.svg'">
-          <div class="label-info">
-            <div class="label-name">${product.name}</div>
-            <div class="label-category">${product.category}</div>
-            <div class="label-price">${product.price.toFixed(2)} ₺</div>
-            <svg id="barcode"></svg>
-            <div class="label-barcode-text">${product.barcode}</div>
-          </div>
-        </div>
-
+        <div class="labels-container" id="labels"></div>
         <script>
-          JsBarcode("#barcode", "${product.barcode}", {
-            format: "CODE128",
-            width: 1.5,
-            height: 50,
-            displayValue: false
-          });
+          const product = {
+            name: '${product.name.replace(/'/g, "\\'")}',
+            category: '${product.category.replace(/'/g, "\\'")}',
+            price: ${product.price},
+            barcode: '${product.barcode}',
+            image: '${product.image}'
+          };
+
+          function createLabel(index) {
+            const label = document.createElement('div');
+            label.className = 'label';
+            label.innerHTML = \`
+              <img src="\${product.image}" alt="\${product.name}" class="label-image" onerror="this.src='/images/default-product.svg'">
+              <div class="label-name">\${product.name}</div>
+              <div class="label-category">\${product.category}</div>
+              <div class="label-price">\${product.price.toFixed(2)} TL</div>
+              <div class="label-barcode-img">
+                <svg id="barcode-\${index}"></svg>
+              </div>
+              <div class="label-barcode-text">\${product.barcode}</div>
+            \`;
+            return label;
+          }
+
+          const container = document.getElementById('labels');
+          
+          // A4 boyutu: 210 x 297 mm
+          // Etiket: 40mm x 60mm
+          // Padding: 5mm
+          // Sıra sayısı: 5 (yatay) x 4 (dikey) = 20 etiket per sayfa
+          
+          for (let i = 0; i < 20; i++) {
+            const label = createLabel(i);
+            container.appendChild(label);
+            
+            // İlk sayfayı doldurduktan sonra sayfa boşlama
+            if ((i + 1) % 20 === 0 && i < 99) {
+              const pageBreak = document.createElement('div');
+              pageBreak.style.pageBreakAfter = 'always';
+              container.appendChild(pageBreak);
+            }
+          }
+
+          // Barkodları oluştur
+          for (let i = 0; i < 20; i++) {
+            try {
+              JsBarcode('#barcode-' + i, product.barcode, {
+                format: 'CODE128',
+                width: 1.2,
+                height: 30,
+                displayValue: false,
+                margin: 0
+              });
+            } catch(e) {
+              console.error('Barkod hatası:', e);
+            }
+          }
+
           window.onload = function() {
-            window.print();
+            setTimeout(() => window.print(), 500);
           };
         </script>
       </body>
@@ -382,7 +451,7 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Etiket oluşturma hatası: ' + error.message });
+    res.status(500).json({ success: false, message: 'Etiket olusturma hatasi: ' + error.message });
   }
 });
 
