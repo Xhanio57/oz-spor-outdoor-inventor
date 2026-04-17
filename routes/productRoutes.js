@@ -135,80 +135,139 @@ router.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// PDF İndir - Tüm Ürünleri
+// PDF İndir - Tüm Ürünleri (A4 Landscape - Excel Stilinde)
 router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
   try {
     const products = await Product.find().sort({ name: 1 });
     const includeStock = req.params.includeStock === 'true';
 
-    const doc = new PDFDocument();
+    const doc = new PDFDocument({ size: 'A4', margin: 20, layout: 'landscape' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="urunler.pdf"');
     doc.pipe(res);
 
     // Başlık
-    doc.fontSize(20).font('Helvetica-Bold').text('Öz Spor & Outdoor', { align: 'center' });
-    doc.fontSize(12).font('Helvetica').text('Ürün Envanteri', { align: 'center' });
-    doc.fontSize(10).text(`Tarih: ${new Date().toLocaleDateString('tr-TR')}`, { align: 'center' });
-    doc.moveTo(50, doc.y + 10).lineTo(550, doc.y + 10).stroke();
-    doc.moveDown();
+    doc.fontSize(16).font('Helvetica-Bold').text('Öz Spor & Outdoor - Stok Envanteri', { align: 'center' });
+    doc.fontSize(10).font('Helvetica').text(`Tarih: ${new Date().toLocaleDateString('tr-TR')} ${new Date().toLocaleTimeString('tr-TR')}`, { align: 'center' });
+    doc.moveDown(0.5);
 
-    // Kategoriye göre grupla
-    const categories = {};
+    // Tablo başlığı yapısı
+    const pageWidth = doc.page.width - 40;
+    const colWidths = {
+      sn: 25,
+      ad: 120,
+      kategori: 80,
+      barkod: 70,
+      fiyat: 50,
+      toplam: 50,
+      ciro: 60,
+      bedenleri: pageWidth - 25 - 120 - 80 - 70 - 50 - 50 - 60
+    };
+
+    // Tablo başlığı
+    const headerY = doc.y;
+    const headerColor = '#2563eb';
+    
+    doc.fillColor(headerColor).rect(20, headerY, pageWidth, 20).fill();
+    doc.fillColor('white').font('Helvetica-Bold').fontSize(9);
+
+    let x = 20;
+    doc.text('S.N', x, headerY + 5, { width: colWidths.sn });
+    x += colWidths.sn;
+    doc.text('Ürün Adı', x, headerY + 5, { width: colWidths.ad });
+    x += colWidths.ad;
+    doc.text('Kategori', x, headerY + 5, { width: colWidths.kategori });
+    x += colWidths.kategori;
+    doc.text('Barkod', x, headerY + 5, { width: colWidths.barkod });
+    x += colWidths.barkod;
+    doc.text('Birim Fiyat', x, headerY + 5, { width: colWidths.fiyat });
+    x += colWidths.fiyat;
+    doc.text('Toplam Stok', x, headerY + 5, { width: colWidths.toplam });
+    x += colWidths.toplam;
+    doc.text('Potansiyel Ciro', x, headerY + 5, { width: colWidths.ciro });
+    x += colWidths.ciro;
+    doc.text('Beden Detayları', x, headerY + 5, { width: colWidths.bedenleri });
+
+    let rowY = headerY + 25;
+    let sn = 1;
+    let totalStock = 0;
+    let totalRevenue = 0;
+
+    doc.fillColor('black').font('Helvetica').fontSize(8);
+
+    // Satırları yazma
     products.forEach(p => {
-      if (!categories[p.category]) {
-        categories[p.category] = [];
+      const prodTotalStock = p.sizeStock.reduce((a, b) => a + b.stock, 0);
+      const prodRevenue = p.price * prodTotalStock;
+      
+      totalStock += prodTotalStock;
+      totalRevenue += prodRevenue;
+
+      // Beden detayları
+      const sizeDetails = p.sizeStock.map(s => `${s.size}(${s.stock})`).join(', ');
+
+      // Satır yüksekliği kontrol
+      let lineCount = 1;
+      const nameLines = doc.heightOfString(p.name, { width: colWidths.ad });
+      const sizeLines = doc.heightOfString(sizeDetails, { width: colWidths.bedenleri });
+      lineCount = Math.max(Math.ceil(nameLines / 10), Math.ceil(sizeLines / 10), 1);
+      const rowHeight = lineCount * 12 + 4;
+
+      // Sayfa kontrol
+      if (rowY + rowHeight > doc.page.height - 40) {
+        doc.addPage({ layout: 'landscape' });
+        rowY = 20;
       }
-      categories[p.category].push(p);
+
+      // Satır arkaplanı
+      if (sn % 2 === 0) {
+        doc.fillColor('#f3f4f6').rect(20, rowY, pageWidth, rowHeight).fill();
+      }
+
+      doc.fillColor('black');
+
+      x = 20;
+      doc.text(sn, x, rowY + 2, { width: colWidths.sn, align: 'center' });
+      x += colWidths.sn;
+      doc.text(p.name, x, rowY + 2, { width: colWidths.ad });
+      x += colWidths.ad;
+      doc.text(p.category, x, rowY + 2, { width: colWidths.kategori });
+      x += colWidths.kategori;
+      doc.text(p.barcode, x, rowY + 2, { width: colWidths.barkod, align: 'center' });
+      x += colWidths.barkod;
+      doc.text(p.price.toFixed(2) + ' ₺', x, rowY + 2, { width: colWidths.fiyat, align: 'right' });
+      x += colWidths.fiyat;
+
+      const stockColor = prodTotalStock === 0 ? '#dc2626' : prodTotalStock < 10 ? '#f59e0b' : '#10b981';
+      doc.fillColor(stockColor).text(prodTotalStock, x, rowY + 2, { width: colWidths.toplam, align: 'center' });
+      doc.fillColor('black');
+      x += colWidths.toplam;
+
+      doc.text(prodRevenue.toFixed(2) + ' ₺', x, rowY + 2, { width: colWidths.ciro, align: 'right' });
+      x += colWidths.ciro;
+      doc.text(sizeDetails, x, rowY + 2, { width: colWidths.bedenleri, fontSize: 7 });
+
+      // Satır sınırı
+      doc.strokeColor('#e5e7eb').lineWidth(0.5).moveTo(20, rowY + rowHeight).lineTo(doc.page.width - 20, rowY + rowHeight).stroke();
+
+      rowY += rowHeight;
+      sn++;
     });
 
-    // Her kategorisi için
-    Object.keys(categories).forEach(cat => {
-      doc.fontSize(14).font('Helvetica-Bold').text(cat, { underline: true });
-      doc.moveDown(0.3);
+    // Özet bölümü
+    doc.moveDown(1);
+    doc.fillColor('#f3f4f6').rect(20, doc.y, pageWidth, 80).fill();
+    doc.fillColor('black').font('Helvetica-Bold').fontSize(11);
 
-      categories[cat].forEach(p => {
-        const totalStock = p.sizeStock.reduce((a, b) => a + b.stock, 0);
+    const summaryY = doc.y + 10;
+    doc.text('ÖZET', 30, summaryY);
 
-        doc.fontSize(11).font('Helvetica-Bold').text(p.name);
-        doc.fontSize(10).font('Helvetica')
-          .text(`Barkod: ${p.barcode}`)
-          .text(`Fiyat: ${p.price.toFixed(2)} ₺`);
-
-        if (includeStock) {
-          doc.text(`Toplam Stok: ${totalStock}`, { color: totalStock === 0 ? '#dc2626' : '#2563eb' });
-          
-          if (p.sizeStock.length > 1 || p.sizeStock[0].size !== 'Tek Boyut') {
-            doc.fontSize(9).font('Helvetica').text('Beden Detayları:');
-            p.sizeStock.forEach(s => {
-              const color = s.stock === 0 ? '#dc2626' : s.stock < 5 ? '#f59e0b' : '#10b981';
-              doc.fontSize(8).text(`  ${s.size}: ${s.stock} adet`, { color: color });
-            });
-          }
-        }
-
-        if (p.description) {
-          doc.fontSize(9).font('Helvetica-Oblique').text(`Not: ${p.description}`);
-        }
-
-        doc.moveDown(0.5);
-      });
-
-      doc.moveTo(50, doc.y + 5).lineTo(550, doc.y + 5).stroke();
-      doc.moveDown();
-    });
-
-    // Özet
-    doc.moveDown();
-    doc.fontSize(11).font('Helvetica-Bold').text('Özet:');
-    doc.fontSize(10).font('Helvetica')
-      .text(`Toplam Ürün: ${products.length}`)
-      .text(`Toplam Kategori: ${Object.keys(categories).length}`);
-
-    if (includeStock) {
-      const totalStock = products.reduce((a, p) => a + p.sizeStock.reduce((b, c) => b + c.stock, 0), 0);
-      doc.text(`Toplam Stok: ${totalStock}`);
-    }
+    doc.font('Helvetica').fontSize(10);
+    const summaryStartY = summaryY + 20;
+    doc.text(`Toplam Ürün: ${products.length}`, 30, summaryStartY);
+    doc.text(`Toplam Kategori: ${new Set(products.map(p => p.category)).size}`, 250, summaryStartY);
+    doc.text(`Toplam Stok: ${totalStock} adet`, 30, summaryStartY + 20);
+    doc.text(`Toplam Potansiyel Ciro: ${totalRevenue.toFixed(2)} ₺`, 250, summaryStartY + 20);
 
     doc.end();
   } catch (error) {

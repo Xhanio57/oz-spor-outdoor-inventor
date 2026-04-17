@@ -42,7 +42,6 @@ router.post('/api/sales', async (req, res) => {
     sizeItem.stock -= parseInt(quantity);
     await product.save();
 
-    // Satış geçmişine ekle
     const sale = new SalesHistory({
       productId: productId,
       productName: product.name,
@@ -70,7 +69,6 @@ router.post('/api/sales', async (req, res) => {
   }
 });
 
-// Satış geçmişi listele
 router.get('/api/sales-history', async (req, res) => {
   try {
     const history = await SalesHistory.find()
@@ -85,7 +83,6 @@ router.get('/api/sales-history', async (req, res) => {
   }
 });
 
-// Tarih aralığına göre satış geçmişi
 router.get('/api/sales-history/date/:startDate/:endDate', async (req, res) => {
   try {
     const start = new Date(req.params.startDate);
@@ -101,6 +98,52 @@ router.get('/api/sales-history/date/:startDate/:endDate', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Geçmiş yüklenemedi: ' + error.message
+    });
+  }
+});
+
+// Satış geçmişini sil
+router.delete('/api/sales-history/:id', async (req, res) => {
+  try {
+    const restoreStock = req.query.restore === 'true';
+    
+    const sale = await SalesHistory.findById(req.params.id);
+
+    if (!sale) {
+      return res.status(404).json({
+        success: false,
+        message: 'Satış kaydı bulunamadı'
+      });
+    }
+
+    // Eğer stok geri eklenecekse
+    if (restoreStock) {
+      const product = await Product.findById(sale.productId);
+
+      if (product) {
+        const sizeItem = product.sizeStock.find(s => s.size === sale.size);
+        if (sizeItem) {
+          sizeItem.stock += sale.quantity;
+          await product.save();
+        }
+      }
+    }
+
+    // Satış kaydını sil
+    await SalesHistory.findByIdAndDelete(req.params.id);
+
+    const msg = restoreStock 
+      ? `Satış silindi. ${sale.productName} (${sale.size}) x${sale.quantity} stoka geri eklendi`
+      : `Satış silindi. Stok değişmedi`;
+
+    res.json({
+      success: true,
+      message: msg
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Silme hatası: ' + error.message
     });
   }
 });
