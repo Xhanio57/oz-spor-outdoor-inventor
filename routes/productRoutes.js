@@ -55,11 +55,11 @@ router.post('/api/products', async (req, res) => {
 
 router.put('/api/products/:id', async (req, res) => {
   try {
-    const { name, price, category, image, description } = req.body;
+    const { name, price, category, image, description, discountType, discountValue, discountLabel, labelText } = req.body;
     
     const product = await Product.findByIdAndUpdate(
       req.params.id,
-      { name, price, category, image, description },
+      { name, price, category, image, description, discountType, discountValue, discountLabel, labelText },
       { new: true, runValidators: true }
     );
 
@@ -135,7 +135,7 @@ router.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// PDF İndir - Tüm Ürünleri (A4 Landscape - Excel Stilinde)
+// PDF İndir - Tüm Ürünleri
 router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
   try {
     const products = await Product.find().sort({ name: 1 });
@@ -148,19 +148,14 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
       bufferPages: true
     });
 
-    // Türkçe font desteği
-    doc.registerFont('Turkish', require('path').join(__dirname, '../fonts/times-roman.ttf'));
-
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="urunler.pdf"');
     doc.pipe(res);
 
-    // Başlık
     doc.fontSize(16).font('Helvetica-Bold').text('Oz Spor & Outdoor - Stok Envanteri', { align: 'center' });
     doc.fontSize(10).font('Helvetica').text(`Tarih: ${new Date().toLocaleDateString('tr-TR')} ${new Date().toLocaleTimeString('tr-TR')}`, { align: 'center' });
     doc.moveDown(0.5);
 
-    // Tablo başlığı yapısı
     const pageWidth = doc.page.width - 40;
     const colWidths = {
       sn: 25,
@@ -173,7 +168,6 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
       bedenleri: pageWidth - 25 - 120 - 80 - 70 - 50 - 50 - 60
     };
 
-    // Tablo başlığı
     const headerY = doc.y;
     const headerColor = '#2563eb';
     
@@ -204,7 +198,6 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
 
     doc.fillColor('black').font('Helvetica').fontSize(8);
 
-    // Satırları yazma
     products.forEach(p => {
       const prodTotalStock = p.sizeStock.reduce((a, b) => a + b.stock, 0);
       const prodRevenue = p.price * prodTotalStock;
@@ -212,23 +205,19 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
       totalStock += prodTotalStock;
       totalRevenue += prodRevenue;
 
-      // Beden detayları
       const sizeDetails = p.sizeStock.map(s => `${s.size}(${s.stock})`).join(', ');
 
-      // Satır yüksekliği kontrol
       let lineCount = 1;
       const nameLines = doc.heightOfString(p.name, { width: colWidths.ad });
       const sizeLines = doc.heightOfString(sizeDetails, { width: colWidths.bedenleri });
       lineCount = Math.max(Math.ceil(nameLines / 10), Math.ceil(sizeLines / 10), 1);
       const rowHeight = lineCount * 12 + 4;
 
-      // Sayfa kontrol
       if (rowY + rowHeight > doc.page.height - 40) {
         doc.addPage({ layout: 'landscape' });
         rowY = 20;
       }
 
-      // Satır arkaplanı
       if (sn % 2 === 0) {
         doc.fillColor('#f3f4f6').rect(20, rowY, pageWidth, rowHeight).fill();
       }
@@ -256,14 +245,12 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
       x += colWidths.ciro;
       doc.text(sizeDetails, x, rowY + 2, { width: colWidths.bedenleri, fontSize: 7 });
 
-      // Satır sınırı
       doc.strokeColor('#e5e7eb').lineWidth(0.5).moveTo(20, rowY + rowHeight).lineTo(doc.page.width - 20, rowY + rowHeight).stroke();
 
       rowY += rowHeight;
       sn++;
     });
 
-    // Özet bölümü
     doc.moveDown(1);
     doc.fillColor('#f3f4f6').rect(20, doc.y, pageWidth, 80).fill();
     doc.fillColor('black').font('Helvetica-Bold').fontSize(11);
@@ -284,13 +271,27 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
   }
 });
 
-// Etiket PDF - A4'e sığan 6cm x 4cm - HTML ile barkod
+// Etiket PDF
 router.get('/api/products/:id/label-pdf', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
+    const oldPrice = req.query.oldPrice ? parseFloat(req.query.oldPrice) : null;
+    const labelNote = req.query.labelNote || '';
     
     if (!product) {
       return res.status(404).json({ success: false, message: 'Urun bulunamadi' });
+    }
+
+    // Final fiyatı hesapla
+    let finalPrice = product.price;
+    let discountInfo = '';
+
+    if (product.discountType === 'percentage' && product.discountValue > 0) {
+      finalPrice = product.price * (1 - product.discountValue / 100);
+      discountInfo = `${product.price.toFixed(2)} TL → ${finalPrice.toFixed(2)} TL (-%${product.discountValue})`;
+    } else if (product.discountType === 'fixed' && product.discountValue > 0) {
+      finalPrice = Math.max(0, product.price - product.discountValue);
+      discountInfo = `${product.price.toFixed(2)} TL → ${finalPrice.toFixed(2)} TL (-${product.discountValue.toFixed(2)} TL)`;
     }
 
     const html = `
@@ -318,23 +319,23 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
             width: 40mm;
             height: 60mm;
             background: white;
-            border: 1px solid #ddd;
-            padding: 2mm;
+            border: 2px solid #000;
+            padding: 2.5mm;
             display: flex;
             flex-direction: column;
-            gap: 2mm;
+            gap: 1.5mm;
             box-sizing: border-box;
             page-break-inside: avoid;
           }
           .label-image {
             width: 100%;
-            height: 20mm;
+            height: 15mm;
             object-fit: cover;
             border: 0.5px solid #ddd;
             border-radius: 2px;
           }
           .label-name {
-            font-size: 8px;
+            font-size: 9px;
             font-weight: bold;
             color: #333;
             line-height: 1.1;
@@ -345,18 +346,33 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
             -webkit-box-orient: vertical;
           }
           .label-category {
-            font-size: 6px;
+            font-size: 7px;
             color: #666;
           }
-          .label-price {
-            font-size: 9px;
+          .price-section {
+            border-top: 0.5px solid #ddd;
+            border-bottom: 0.5px solid #ddd;
+            padding: 1.5mm 0;
+          }
+          .price-original {
+            font-size: 11px;
+            color: #999;
+            text-decoration: line-through;
+          }
+          .price-final {
+            font-size: 12px;
             font-weight: bold;
             color: #2563eb;
+          }
+          .discount-info {
+            font-size: 6px;
+            color: #dc2626;
             text-align: center;
+            margin-top: 1mm;
           }
           .label-barcode-img {
             width: 100%;
-            height: 12mm;
+            height: 10mm;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -372,10 +388,31 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
             color: #333;
             font-weight: bold;
           }
+          .label-special-text {
+            font-size: 8px;
+            color: #10b981;
+            font-weight: bold;
+            text-align: center;
+            border-top: 0.5px solid #10b981;
+            padding-top: 1mm;
+          }
+          .label-note {
+            font-size: 8px;
+            color: #dc2626;
+            text-align: center;
+            border-top: 0.5px solid #ddd;
+            padding-top: 1mm;
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            line-height: 1.2;
+          }
           @media print {
             body { background: white; padding: 0; margin: 0; }
             .labels-container { gap: 0; padding: 0; }
-            .label { border: 0.5px solid #cccccc; }
+            .label { border: 2px solid #000; }
           }
         </style>
       </head>
@@ -386,38 +423,72 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
             name: '${product.name.replace(/'/g, "\\'")}',
             category: '${product.category.replace(/'/g, "\\'")}',
             price: ${product.price},
+            finalPrice: ${finalPrice},
+            discountInfo: '${discountInfo.replace(/'/g, "\\'")}',
             barcode: '${product.barcode}',
-            image: '${product.image}'
+            image: '${product.image}',
+            labelText: '${product.labelText ? product.labelText.replace(/'/g, "\\'") : ''}',
+            oldPrice: ${oldPrice || 'null'},
+            labelNote: '${labelNote.replace(/'/g, "\\'")}'
           };
 
           function createLabel(index) {
             const label = document.createElement('div');
             label.className = 'label';
+            
+            let priceHtml = '';
+            if (product.oldPrice) {
+              priceHtml = \`
+                <div class="price-section">
+                  <div class="price-original">\${product.oldPrice.toFixed(2)} TL</div>
+                  <div class="price-final">\${product.price.toFixed(2)} TL</div>
+                </div>
+              \`;
+            } else if (product.discountInfo) {
+              priceHtml = \`
+                <div class="price-section">
+                  <div class="price-original">\${product.price.toFixed(2)} TL</div>
+                  <div class="price-final">\${product.finalPrice.toFixed(2)} TL</div>
+                  <div class="discount-info">\${product.discountInfo}</div>
+                </div>
+              \`;
+            } else {
+              priceHtml = \`<div class="price-section"><div class="price-final">\${product.price.toFixed(2)} TL</div></div>\`;
+            }
+
+            let specialText = '';
+            if (product.labelText) {
+              specialText = \`<div class="label-special-text">\${product.labelText}</div>\`;
+            }
+
+            let noteHtml = '';
+            if (product.labelNote) {
+              noteHtml = \`<div class="label-note">\${product.labelNote}</div>\`;
+            } else {
+              noteHtml = '<div class="label-note"></div>';
+            }
+
             label.innerHTML = \`
               <img src="\${product.image}" alt="\${product.name}" class="label-image" onerror="this.src='/images/default-product.svg'">
               <div class="label-name">\${product.name}</div>
               <div class="label-category">\${product.category}</div>
-              <div class="label-price">\${product.price.toFixed(2)} TL</div>
+              \${priceHtml}
               <div class="label-barcode-img">
                 <svg id="barcode-\${index}"></svg>
               </div>
               <div class="label-barcode-text">\${product.barcode}</div>
+              \${specialText}
+              \${noteHtml}
             \`;
             return label;
           }
 
           const container = document.getElementById('labels');
           
-          // A4 boyutu: 210 x 297 mm
-          // Etiket: 40mm x 60mm
-          // Padding: 5mm
-          // Sıra sayısı: 5 (yatay) x 4 (dikey) = 20 etiket per sayfa
-          
           for (let i = 0; i < 20; i++) {
             const label = createLabel(i);
             container.appendChild(label);
             
-            // İlk sayfayı doldurduktan sonra sayfa boşlama
             if ((i + 1) % 20 === 0 && i < 99) {
               const pageBreak = document.createElement('div');
               pageBreak.style.pageBreakAfter = 'always';
@@ -425,18 +496,17 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
             }
           }
 
-          // Barkodları oluştur
           for (let i = 0; i < 20; i++) {
             try {
               JsBarcode('#barcode-' + i, product.barcode, {
                 format: 'CODE128',
                 width: 1.2,
-                height: 30,
+                height: 24,
                 displayValue: false,
                 margin: 0
               });
             } catch(e) {
-              console.error('Barkod hatası:', e);
+              console.error('Barkod hatasi:', e);
             }
           }
 

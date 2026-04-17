@@ -37,6 +37,19 @@ const productSchema = new mongoose.Schema(
       required: [true, 'Fiyat zorunludur'],
       min: [0, 'Fiyat negatif olamaz']
     },
+    discountType: {
+      type: String,
+      enum: ['none', 'percentage', 'fixed'],
+      default: 'none'
+    },
+    discountValue: {
+      type: Number,
+      default: 0
+    },
+    discountLabel: {
+      type: String,
+      default: ''
+    },
     category: {
       type: String,
       required: [true, 'Kategori zorunludur'],
@@ -49,6 +62,10 @@ const productSchema = new mongoose.Schema(
       default: '/images/default-product.png'
     },
     description: {
+      type: String,
+      default: ''
+    },
+    labelText: {
       type: String,
       default: ''
     }
@@ -84,6 +101,17 @@ productSchema.pre('save', async function (next) {
 
 productSchema.virtual('totalStock').get(function() {
   return this.sizeStock.reduce((total, item) => total + item.stock, 0);
+});
+
+productSchema.virtual('finalPrice').get(function() {
+  if (this.discountType === 'none') return this.price;
+  if (this.discountType === 'percentage') {
+    return this.price * (1 - this.discountValue / 100);
+  }
+  if (this.discountType === 'fixed') {
+    return Math.max(0, this.price - this.discountValue);
+  }
+  return this.price;
 });
 
 module.exports = mongoose.model('Product', productSchema);
