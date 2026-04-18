@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
-const PDFDocument = require('pdfkit');
+const htmlPdf = require('html-pdf');
+const path = require('path');
 
 router.get('/api/products', async (req, res) => {
   try {
@@ -135,70 +136,16 @@ router.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// PDF İndir - Tüm Ürünleri
+// PDF İndir - Tüm Ürünleri (HTML-PDF ile Türkçe Desteği)
 router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
   try {
     const products = await Product.find().sort({ name: 1 });
     const includeStock = req.params.includeStock === 'true';
 
-    const doc = new PDFDocument({ 
-      size: 'A4', 
-      margin: 20, 
-      layout: 'landscape',
-      bufferPages: true
-    });
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="urunler.pdf"');
-    doc.pipe(res);
-
-    doc.fontSize(16).font('Helvetica-Bold').text('Oz Spor & Outdoor - Stok Envanteri', { align: 'center' });
-    doc.fontSize(10).font('Helvetica').text(`Tarih: ${new Date().toLocaleDateString('tr-TR')} ${new Date().toLocaleTimeString('tr-TR')}`, { align: 'center' });
-    doc.moveDown(0.5);
-
-    const pageWidth = doc.page.width - 40;
-    const colWidths = {
-      sn: 25,
-      ad: 120,
-      kategori: 80,
-      barkod: 70,
-      fiyat: 50,
-      toplam: 50,
-      ciro: 60,
-      bedenleri: pageWidth - 25 - 120 - 80 - 70 - 50 - 50 - 60
-    };
-
-    const headerY = doc.y;
-    const headerColor = '#2563eb';
-    
-    doc.fillColor(headerColor).rect(20, headerY, pageWidth, 20).fill();
-    doc.fillColor('white').font('Helvetica-Bold').fontSize(9);
-
-    let x = 20;
-    doc.text('S.N', x, headerY + 5, { width: colWidths.sn });
-    x += colWidths.sn;
-    doc.text('Urun Adi', x, headerY + 5, { width: colWidths.ad });
-    x += colWidths.ad;
-    doc.text('Kategori', x, headerY + 5, { width: colWidths.kategori });
-    x += colWidths.kategori;
-    doc.text('Barkod', x, headerY + 5, { width: colWidths.barkod });
-    x += colWidths.barkod;
-    doc.text('Birim Fiyat', x, headerY + 5, { width: colWidths.fiyat });
-    x += colWidths.fiyat;
-    doc.text('Toplam Stok', x, headerY + 5, { width: colWidths.toplam });
-    x += colWidths.toplam;
-    doc.text('Potansiyel Ciro', x, headerY + 5, { width: colWidths.ciro });
-    x += colWidths.ciro;
-    doc.text('Beden Detaylari', x, headerY + 5, { width: colWidths.bedenleri });
-
-    let rowY = headerY + 25;
-    let sn = 1;
     let totalStock = 0;
     let totalRevenue = 0;
 
-    doc.fillColor('black').font('Helvetica').fontSize(8);
-
-    products.forEach(p => {
+    let tableRows = products.map((p, idx) => {
       const prodTotalStock = p.sizeStock.reduce((a, b) => a + b.stock, 0);
       const prodRevenue = p.price * prodTotalStock;
       
@@ -206,68 +153,141 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
       totalRevenue += prodRevenue;
 
       const sizeDetails = p.sizeStock.map(s => `${s.size}(${s.stock})`).join(', ');
+      const bgColor = idx % 2 === 0 ? '#ffffff' : '#f3f4f6';
 
-      let lineCount = 1;
-      const nameLines = doc.heightOfString(p.name, { width: colWidths.ad });
-      const sizeLines = doc.heightOfString(sizeDetails, { width: colWidths.bedenleri });
-      lineCount = Math.max(Math.ceil(nameLines / 10), Math.ceil(sizeLines / 10), 1);
-      const rowHeight = lineCount * 12 + 4;
+      return `
+        <tr style="background-color: ${bgColor};">
+          <td style="text-align: center;">${idx + 1}</td>
+          <td>${p.name}</td>
+          <td>${p.category}</td>
+          <td style="text-align: center;">${p.barcode}</td>
+          <td style="text-align: right;">${p.price.toFixed(2)} TL</td>
+          <td style="text-align: center; color: ${prodTotalStock === 0 ? '#dc2626' : prodTotalStock < 10 ? '#f59e0b' : '#10b981'}; font-weight: bold;">${prodTotalStock}</td>
+          <td style="text-align: right;">${prodRevenue.toFixed(2)} TL</td>
+          <td>${sizeDetails}</td>
+        </tr>
+      `;
+    }).join('');
 
-      if (rowY + rowHeight > doc.page.height - 40) {
-        doc.addPage({ layout: 'landscape' });
-        rowY = 20;
+    const html = `
+      <!DOCTYPE html>
+      <html lang="tr">
+      <head>
+        <meta charset="UTF-8">
+        <title>Stok Envanteri</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            color: #333;
+          }
+          h1 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 5px;
+          }
+          .subtitle {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 20px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+          }
+          th {
+            background-color: #2563eb;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 13px;
+          }
+          td {
+            padding: 10px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 12px;
+          }
+          .summary {
+            background-color: #f3f4f6;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+          }
+          .summary h3 {
+            margin-top: 0;
+            font-size: 14px;
+            color: #2563eb;
+          }
+          .summary-items {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+          }
+          .summary-item {
+            font-size: 13px;
+          }
+          .summary-item strong {
+            color: #2563eb;
+            font-weight: bold;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Öz Spor & Outdoor - Stok Envanteri</h1>
+        <div class="subtitle">Tarih: ${new Date().toLocaleDateString('tr-TR')} ${new Date().toLocaleTimeString('tr-TR')}</div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 5%;">S.N</th>
+              <th style="width: 20%;">Ürün Adı</th>
+              <th style="width: 12%;">Kategori</th>
+              <th style="width: 10%;">Barkod</th>
+              <th style="width: 10%;">Birim Fiyat</th>
+              <th style="width: 10%;">Toplam Stok</th>
+              <th style="width: 12%;">Potansiyel Ciro</th>
+              <th style="width: 21%;">Beden Detayları</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+
+        <div class="summary">
+          <h3>ÖZET</h3>
+          <div class="summary-items">
+            <div class="summary-item">Toplam Ürün: <strong>${products.length}</strong></div>
+            <div class="summary-item">Toplam Kategori: <strong>${new Set(products.map(p => p.category)).size}</strong></div>
+            <div class="summary-item">Toplam Stok: <strong>${totalStock} adet</strong></div>
+            <div class="summary-item">Toplam Potansiyel Ciro: <strong>${totalRevenue.toFixed(2)} TL</strong></div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const options = {
+      format: 'A4',
+      orientation: 'landscape',
+      margin: '10mm'
+    };
+
+    htmlPdf.create(html, options).toStream((err, stream) => {
+      if (err) {
+        return res.status(500).json({ success: false, message: 'PDF oluşturma hatası: ' + err.message });
       }
-
-      if (sn % 2 === 0) {
-        doc.fillColor('#f3f4f6').rect(20, rowY, pageWidth, rowHeight).fill();
-      }
-
-      doc.fillColor('black');
-
-      x = 20;
-      doc.text(sn, x, rowY + 2, { width: colWidths.sn, align: 'center' });
-      x += colWidths.sn;
-      doc.text(p.name, x, rowY + 2, { width: colWidths.ad });
-      x += colWidths.ad;
-      doc.text(p.category, x, rowY + 2, { width: colWidths.kategori });
-      x += colWidths.kategori;
-      doc.text(p.barcode, x, rowY + 2, { width: colWidths.barkod, align: 'center' });
-      x += colWidths.barkod;
-      doc.text(p.price.toFixed(2) + ' TL', x, rowY + 2, { width: colWidths.fiyat, align: 'right' });
-      x += colWidths.fiyat;
-
-      const stockColor = prodTotalStock === 0 ? '#dc2626' : prodTotalStock < 10 ? '#f59e0b' : '#10b981';
-      doc.fillColor(stockColor).text(prodTotalStock, x, rowY + 2, { width: colWidths.toplam, align: 'center' });
-      doc.fillColor('black');
-      x += colWidths.toplam;
-
-      doc.text(prodRevenue.toFixed(2) + ' TL', x, rowY + 2, { width: colWidths.ciro, align: 'right' });
-      x += colWidths.ciro;
-      doc.text(sizeDetails, x, rowY + 2, { width: colWidths.bedenleri, fontSize: 7 });
-
-      doc.strokeColor('#e5e7eb').lineWidth(0.5).moveTo(20, rowY + rowHeight).lineTo(doc.page.width - 20, rowY + rowHeight).stroke();
-
-      rowY += rowHeight;
-      sn++;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="urunler.pdf"');
+      stream.pipe(res);
     });
 
-    doc.moveDown(1);
-    doc.fillColor('#f3f4f6').rect(20, doc.y, pageWidth, 80).fill();
-    doc.fillColor('black').font('Helvetica-Bold').fontSize(11);
-
-    const summaryY = doc.y + 10;
-    doc.text('OZET', 30, summaryY);
-
-    doc.font('Helvetica').fontSize(10);
-    const summaryStartY = summaryY + 20;
-    doc.text(`Toplam Urun: ${products.length}`, 30, summaryStartY);
-    doc.text(`Toplam Kategori: ${new Set(products.map(p => p.category)).size}`, 250, summaryStartY);
-    doc.text(`Toplam Stok: ${totalStock} adet`, 30, summaryStartY + 20);
-    doc.text(`Toplam Potansiyel Ciro: ${totalRevenue.toFixed(2)} TL`, 250, summaryStartY + 20);
-
-    doc.end();
   } catch (error) {
-    res.status(500).json({ success: false, message: 'PDF olusturma hatasi: ' + error.message });
+    console.error('PDF hatası:', error);
+    res.status(500).json({ success: false, message: 'PDF oluşturma hatası: ' + error.message });
   }
 });
 
@@ -279,7 +299,7 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
     const labelNote = req.query.labelNote || '';
     
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Urun bulunamadi' });
+      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
     }
 
     // Final fiyatı hesapla
@@ -326,6 +346,7 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
             gap: 1.5mm;
             box-sizing: border-box;
             page-break-inside: avoid;
+            position: relative;
           }
           .label-image {
             width: 100%;
@@ -353,11 +374,22 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
             border-top: 0.5px solid #ddd;
             border-bottom: 0.5px solid #ddd;
             padding: 1.5mm 0;
+            position: relative;
           }
           .price-original {
-            font-size: 11px;
+            font-size: 7px;
             color: #999;
             text-decoration: line-through;
+            position: relative;
+          }
+          .price-original svg {
+            position: absolute;
+            color: gray;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            width: 25%;
+            height: 1px;
           }
           .price-final {
             font-size: 12px;
@@ -440,14 +472,24 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
             if (product.oldPrice) {
               priceHtml = \`
                 <div class="price-section">
-                  <div class="price-original">\${product.oldPrice.toFixed(2)} TL</div>
+                  <div class="price-original">
+                    \${product.oldPrice.toFixed(2)} TL
+                    <svg viewBox="0 0 100 2" preserveAspectRatio="none">
+                      <line x1="0" y1="1" x2="100" y2="1" stroke="black" stroke-width="1.5"/>
+                    </svg>
+                  </div>
                   <div class="price-final">\${product.price.toFixed(2)} TL</div>
                 </div>
               \`;
             } else if (product.discountInfo) {
               priceHtml = \`
                 <div class="price-section">
-                  <div class="price-original">\${product.price.toFixed(2)} TL</div>
+                  <div class="price-original">
+                    \${product.price.toFixed(2)} TL
+                    <svg viewBox="0 0 100 2" preserveAspectRatio="none">
+                      <line x1="0" y1="1" x2="100" y2="1" stroke="black" stroke-width="1.5"/>
+                    </svg>
+                  </div>
                   <div class="price-final">\${product.finalPrice.toFixed(2)} TL</div>
                   <div class="discount-info">\${product.discountInfo}</div>
                 </div>
@@ -506,7 +548,7 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
                 margin: 0
               });
             } catch(e) {
-              console.error('Barkod hatasi:', e);
+              console.error('Barkod hatası:', e);
             }
           }
 
@@ -521,7 +563,7 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Etiket olusturma hatasi: ' + error.message });
+    res.status(500).json({ success: false, message: 'Etiket oluşturma hatası: ' + error.message });
   }
 });
 
