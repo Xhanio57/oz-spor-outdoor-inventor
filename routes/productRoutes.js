@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
+const PDFDocument = require('pdfkit');
 const htmlPdf = require('html-pdf');
 const path = require('path');
 
@@ -291,7 +292,291 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
   }
 });
 
-// Etiket PDF
+// TOPLU ETİKET PDF
+router.get('/api/products/bulk-labels-pdf', async (req, res) => {
+  try {
+    const { products: productsStr, oldPrice, labelNote, useStockQty } = req.query;
+
+    if (!productsStr) {
+      return res.status(400).json({ success: false, message: 'Ürün seçin' });
+    }
+
+    const productIds = JSON.parse(decodeURIComponent(productsStr));
+    const parsedOldPrice = oldPrice && oldPrice !== '' ? parseFloat(oldPrice) : null;
+    const useStock = useStockQty === 'true';
+
+    // Seçili ürünleri getir
+    const selectedProducts = await Product.find({ _id: { $in: productIds } });
+
+    if (selectedProducts.length === 0) {
+      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
+    }
+
+    // Etiketleri oluştur
+    let labels = [];
+    selectedProducts.forEach(product => {
+      // Final fiyatı hesapla
+      let finalPrice = product.price;
+      let discountInfo = '';
+
+      if (product.discountType === 'percentage' && product.discountValue > 0) {
+        finalPrice = product.price * (1 - product.discountValue / 100);
+        discountInfo = `${product.price.toFixed(2)} TL → ${finalPrice.toFixed(2)} TL (-%${product.discountValue})`;
+      } else if (product.discountType === 'fixed' && product.discountValue > 0) {
+        finalPrice = Math.max(0, product.price - product.discountValue);
+        discountInfo = `${product.price.toFixed(2)} TL → ${finalPrice.toFixed(2)} TL (-${product.discountValue.toFixed(2)} TL)`;
+      }
+
+      // Stok sayısı kadar etiket oluştur
+      const totalStock = product.sizeStock.reduce((a, b) => a + b.stock, 0);
+      const labelCount = useStock ? totalStock : 1;
+
+      for (let i = 0; i < labelCount; i++) {
+        labels.push({
+          name: product.name,
+          category: product.category,
+          price: product.price,
+          finalPrice: finalPrice,
+          discountInfo: discountInfo,
+          barcode: product.barcode,
+          image: product.image,
+          labelText: product.labelText || '',
+          oldPrice: parsedOldPrice,
+          labelNote: labelNote || ''
+        });
+      }
+    });
+
+    // HTML oluştur
+    let labelHtml = '';
+    labels.forEach((label, idx) => {
+      let priceHtml = '';
+      if (label.oldPrice) {
+        priceHtml = `
+          <div class="price-section">
+            <div class="price-original">
+              ${label.oldPrice.toFixed(2)} TL
+              <svg viewBox="0 0 100 2" preserveAspectRatio="none">
+                <line x1="0" y1="1" x2="100" y2="1" stroke="black" stroke-width="1.5"/>
+              </svg>
+            </div>
+            <div class="price-final">${label.price.toFixed(2)} TL</div>
+          </div>
+        `;
+      } else if (label.discountInfo) {
+        priceHtml = `
+          <div class="price-section">
+            <div class="price-original">
+              ${label.price.toFixed(2)} TL
+              <svg viewBox="0 0 100 2" preserveAspectRatio="none">
+                <line x1="0" y1="1" x2="100" y2="1" stroke="black" stroke-width="1.5"/>
+              </svg>
+            </div>
+            <div class="price-final">${label.finalPrice.toFixed(2)} TL</div>
+            <div class="discount-info">${label.discountInfo}</div>
+          </div>
+        `;
+      } else {
+        priceHtml = `<div class="price-section"><div class="price-final">${label.price.toFixed(2)} TL</div></div>`;
+      }
+
+      let specialText = '';
+      if (label.labelText) {
+        specialText = `<div class="label-special-text">${label.labelText}</div>`;
+      }
+
+      let noteHtml = '';
+      if (label.labelNote) {
+        noteHtml = `<div class="label-note">${label.labelNote}</div>`;
+      } else {
+        noteHtml = '<div class="label-note"></div>';
+      }
+
+      labelHtml += `
+        <div class="label">
+          <img src="${label.image}" alt="${label.name}" class="label-image" onerror="this.src='/images/default-product.svg'">
+          <div class="label-name">${label.name}</div>
+          <div class="label-category">${label.category}</div>
+          ${priceHtml}
+          <div class="label-barcode-img">
+            <svg id="barcode-${idx}"></svg>
+          </div>
+          <div class="label-barcode-text">${label.barcode}</div>
+          ${specialText}
+          ${noteHtml}
+        </div>
+      `;
+    });
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="tr">
+      <head>
+        <meta charset="UTF-8">
+        <title>Toplu Etiketler</title>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: Arial, sans-serif; 
+            background: #f5f5f5; 
+            padding: 5mm;
+            margin: 0;
+          }
+          .labels-container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5mm;
+            padding: 5mm;
+          }
+          .label {
+            width: 40mm;
+            height: 60mm;
+            background: white;
+            border: 2px solid #000;
+            padding: 2.5mm;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5mm;
+            box-sizing: border-box;
+            page-break-inside: avoid;
+            position: relative;
+          }
+          .label-image {
+            width: 100%;
+            height: 15mm;
+            object-fit: cover;
+            border: 0.5px solid #ddd;
+            border-radius: 2px;
+          }
+          .label-name {
+            font-size: 9px;
+            font-weight: bold;
+            color: #333;
+            line-height: 1.1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+          }
+          .label-category {
+            font-size: 7px;
+            color: #666;
+          }
+          .price-section {
+            border-top: 0.5px solid #ddd;
+            border-bottom: 0.5px solid #ddd;
+            padding: 1.5mm 0;
+            position: relative;
+          }
+          .price-original {
+            font-size: 7px;
+            color: #999;
+            text-decoration: line-through;
+            position: relative;
+          }
+          .price-original svg {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            width: 100%;
+            height: 2px;
+          }
+          .price-final {
+            font-size: 12px;
+            font-weight: bold;
+            color: #2563eb;
+          }
+          .discount-info {
+            font-size: 6px;
+            color: #dc2626;
+            text-align: center;
+            margin-top: 1mm;
+          }
+          .label-barcode-img {
+            width: 100%;
+            height: 10mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .label-barcode-img svg {
+            width: 100%;
+            height: 100%;
+          }
+          .label-barcode-text {
+            font-size: 6px;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+            color: #333;
+            font-weight: bold;
+          }
+          .label-special-text {
+            font-size: 8px;
+            color: #10b981;
+            font-weight: bold;
+            text-align: center;
+            border-top: 0.5px solid #10b981;
+            padding-top: 1mm;
+          }
+          .label-note {
+            font-size: 8px;
+            color: #dc2626;
+            text-align: center;
+            border-top: 0.5px solid #ddd;
+            padding-top: 1mm;
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            line-height: 1.2;
+          }
+          @media print {
+            body { background: white; padding: 0; margin: 0; }
+            .labels-container { gap: 0; padding: 0; }
+            .label { border: 2px solid #000; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="labels-container" id="labels">${labelHtml}</div>
+        <script>
+          const labels = ${JSON.stringify(labels)};
+          
+          for (let i = 0; i < labels.length; i++) {
+            try {
+              JsBarcode('#barcode-' + i, labels[i].barcode, {
+                format: 'CODE128',
+                width: 1.2,
+                height: 24,
+                displayValue: false,
+                margin: 0
+              });
+            } catch(e) {
+              console.error('Barkod hatasi:', e);
+            }
+          }
+
+          window.onload = function() {
+            setTimeout(() => window.print(), 500);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error) {
+    console.error('Toplu etiket hatası:', error);
+    res.status(500).json({ success: false, message: 'Etiket oluşturma hatası: ' + error.message });
+  }
+});
+
+// Tek etiket PDF
 router.get('/api/products/:id/label-pdf', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -384,12 +669,11 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
           }
           .price-original svg {
             position: absolute;
-            color: gray;
             top: 50%;
             left: 0;
             transform: translateY(-50%);
-            width: 25%;
-            height: 1px;
+            width: 100%;
+            height: 2px;
           }
           .price-final {
             font-size: 12px;
