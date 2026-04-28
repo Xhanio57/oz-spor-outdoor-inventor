@@ -53,7 +53,7 @@ const productSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, 'Kategori zorunludur'],
-      enum: ['Spor Giyim', 'Judogi', 'Kamp Malzemeleri', 'Ayakkabı', 'Aksesuarlar', 'Diğer'],
+      enum: ['Spor Giyim', 'Judogi', 'Kamp Malzemeleri', 'Ayakkabı', 'Aksesuarlar', 'Çocuk Giyim', 'Diğer'],
       default: 'Diğer'
     },
     sizeStock: [sizeStockSchema],
@@ -85,6 +85,7 @@ productSchema.pre('save', async function (next) {
       'Judogi': Array.from({length: 11}, (_, i) => (100 + i * 10).toString() + 'cm'),
       'Ayakkabı': Array.from({length: 11}, (_, i) => (36 + i).toString()),
       'Spor Giyim': ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '4XL', '5XL'],
+      'Çocuk Giyim': Array.from({length: 13}, (_, i) => (4 + i) + ' Yaş'),
       'Kamp Malzemeleri': ['Tek Boyut'],
       'Aksesuarlar': ['Tek Boyut'],
       'Diğer': ['Tek Boyut']
