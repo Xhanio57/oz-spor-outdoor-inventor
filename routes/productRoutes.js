@@ -16,7 +16,7 @@ router.get('/api/products', async (req, res) => {
 
 router.post('/api/products', async (req, res) => {
   try {
-    const { name, price, category, barcode, image, description } = req.body;
+    const { name, price, category, barcode, image, description, customSizes } = req.body;
 
     if (!name || !price || !category) {
       return res.status(400).json({
@@ -33,6 +33,15 @@ router.post('/api/products', async (req, res) => {
       image: image || undefined,
       description: description || ''
     });
+
+    if (customSizes && Array.isArray(customSizes) && customSizes.length > 0) {
+      const validSizes = customSizes
+        .map(s => String(s).trim())
+        .filter(s => s.length > 0);
+      if (validSizes.length > 0) {
+        newProduct.sizeStock = validSizes.map(size => ({ size, stock: 0 }));
+      }
+    }
 
     await newProduct.save();
 
