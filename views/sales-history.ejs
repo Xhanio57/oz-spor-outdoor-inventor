@@ -35,6 +35,7 @@
               <th style="text-align:right;">Birim Fiyat</th>
               <th style="text-align:right;">Toplam</th>
               <th>Ödeme</th>
+              <th>Fiş</th>
             </tr>
           </thead>
           <tbody id="historyBody">
@@ -55,7 +56,7 @@
           renderTable(allHistory);
         } catch (err) {
           document.getElementById('historyBody').innerHTML =
-            '<tr><td colspan="9" class="text-center">Satış geçmişi yüklenemedi</td></tr>';
+            '<tr><td colspan="10" class="text-center">Satış geçmişi yüklenemedi</td></tr>';
         }
       }
 
@@ -79,7 +80,7 @@
       function renderTable(data) {
         const tbody = document.getElementById('historyBody');
         if (data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="9" class="text-center">Satış kaydı bulunamadı</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="10" class="text-center">Satış kaydı bulunamadı</td></tr>';
           return;
         }
 
@@ -106,6 +107,7 @@
               <td style="text-align:right;">\${r.price ? r.price.toFixed(2) + ' ₺' : '-'}</td>
               <td style="text-align:right;font-weight:600;color:#10b981;">\${r.totalPrice ? r.totalPrice.toFixed(2) + ' ₺' : '-'}</td>
               <td>\${r.paymentMethod || '-'}</td>
+              <td><a href="/api/satis/\${r._id}/receipt" target="_blank" class="btn btn-small" style="background:#f59e0b;color:white;text-decoration:none;white-space:nowrap;">🧾 Fiş</a></td>
             </tr>
           \`;
         }).join('');

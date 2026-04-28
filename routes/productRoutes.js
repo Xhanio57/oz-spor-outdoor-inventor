@@ -43,6 +43,12 @@ router.get('/api/products/report-pdf', async (req, res) => {
       `;
     }).join('');
 
+    const totalStockAll = products.reduce((sum, p) => sum + p.sizeStock.reduce((s, i) => s + i.stock, 0), 0);
+    const totalValueAll = products.reduce((sum, p) => {
+      const stock = p.sizeStock.reduce((s, i) => s + i.stock, 0);
+      return sum + p.price * stock;
+    }, 0);
+
     const html = `
       <!DOCTYPE html>
       <html lang="tr">
@@ -55,12 +61,14 @@ router.get('/api/products/report-pdf', async (req, res) => {
           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
           th { background: #2563eb; color: white; padding: 10px 8px; text-align: left; }
           td { border-bottom: 1px solid #e5e7eb; }
+          tfoot tr { background: #eff6ff; font-weight: bold; }
+          tfoot td { border-top: 2px solid #2563eb; padding: 10px 8px; }
           @media print { body { margin: 20px; } }
         </style>
       </head>
       <body>
         <h1>📦 Stok Raporu</h1>
-        <p>Tarih: ${new Date().toLocaleDateString('tr-TR')} | Toplam Ürün: ${products.length}</p>
+        <p>Tarih: ${new Date().toLocaleDateString('tr-TR')} | Toplam Ürün: ${products.length} | Toplam Stok: ${totalStockAll} adet | Stok Değeri: ${totalValueAll.toFixed(2)} TL</p>
         <table>
           <thead>
             <tr>
@@ -74,6 +82,14 @@ router.get('/api/products/report-pdf', async (req, res) => {
             </tr>
           </thead>
           <tbody>${rows}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4" style="text-align:right;">GENEL TOPLAM</td>
+              <td style="text-align:right;">${totalValueAll.toFixed(2)} TL</td>
+              <td style="text-align:center;">${totalStockAll} adet</td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
         <script>window.onload = function() { window.print(); };</script>
       </body>
@@ -84,6 +100,141 @@ router.get('/api/products/report-pdf', async (req, res) => {
     res.send(html);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Rapor oluşturma hatası: ' + error.message });
+  }
+});
+
+// Toplu Etiket PDF - tüm ürünler için
+router.get('/api/products/bulk-labels-pdf', async (req, res) => {
+  try {
+    const products = await Product.find().sort({ category: 1, name: 1 });
+
+    let allLabelDivs = '';
+    let barcodeScripts = '';
+    let labelIndex = 0;
+
+    for (const product of products) {
+      const isAge = product.category === 'Çocuk Giyim';
+      const safeName = product.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safeBarcode = product.barcode.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+
+      for (const s of product.sizeStock) {
+        const count = Math.max(s.stock, 1);
+        const sizeDisplay = isAge ? `${s.size} Yaş` : s.size;
+
+        for (let i = 0; i < count; i++) {
+          const slotId = `barcode-slot-${labelIndex}`;
+          const templateId = `barcode-tmpl-${labelIndex}`;
+          allLabelDivs += `
+            <div class="label">
+              <img src="${product.image}" alt="${safeName}" class="label-image" onerror="this.src='/images/default-product.svg'">
+              <div class="label-info">
+                <div class="label-name">${safeName}</div>
+                <div class="label-category">${product.category}</div>
+                ${sizeDisplay ? `<div class="label-size">${sizeDisplay}</div>` : ''}
+                <div class="label-price">${product.price.toFixed(2)} ₺</div>
+                <svg id="${slotId}" style="width:100%;height:40px;"></svg>
+                <div class="label-barcode-text">${product.barcode}</div>
+              </div>
+            </div>
+          `;
+          barcodeScripts += `
+            JsBarcode(document.getElementById('${slotId}'), '${safeBarcode}', {
+              format: 'CODE128', width: 1.5, height: 38, displayValue: false
+            });
+          `;
+          labelIndex++;
+        }
+      }
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="tr">
+      <head>
+        <meta charset="UTF-8">
+        <title>Toplu Ürün Etiketleri</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+          .label {
+            width: 80mm;
+            background: white;
+            padding: 8mm;
+            margin: 0 auto 10px;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            page-break-after: always;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+          }
+          .label-image {
+            width: 100%;
+            height: 40mm;
+            object-fit: cover;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+          }
+          .label-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+          }
+          .label-name {
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            line-height: 1.2;
+          }
+          .label-category {
+            font-size: 10px;
+            color: #666;
+          }
+          .label-size {
+            font-size: 17px;
+            font-weight: bold;
+            color: #fff;
+            background: #2563eb;
+            padding: 3px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            align-self: flex-start;
+          }
+          .label-price {
+            font-size: 15px;
+            font-weight: bold;
+            color: #2563eb;
+          }
+          .label-barcode-text {
+            font-size: 9px;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+            color: #333;
+          }
+          @media print {
+            body { background: white; padding: 0; }
+            .label { margin: 0; box-shadow: none; border: none; }
+          }
+        </style>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+      </head>
+      <body>
+        ${allLabelDivs}
+        <script>
+          window.onload = function() {
+            ${barcodeScripts}
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Toplu etiket oluşturma hatası: ' + error.message });
   }
 });
 
