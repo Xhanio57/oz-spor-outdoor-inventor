@@ -1,39 +1,30 @@
 <%- include('layout', { 
   title: 'Ürün Ekle',
   body: `
-    <div class="form-container">
-      <h2>➕ Yeni Ürün Ekle</h2>
-      <form id="productForm">
-        <input type="text" id="name" placeholder="Ürün Adı" required>
-        <input type="number" id="price" step="0.01" placeholder="Fiyat" required>
+    <div class="form-container" style="max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+      <h2 style="margin-bottom: 20px;">➕ Yeni Ürün Ekle</h2>
+      <form id="productForm" style="display: flex; flex-direction: column; gap: 15px;">
+        <input type="text" id="name" placeholder="Ürün Adı" required style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+        <input type="number" id="price" step="0.01" placeholder="Fiyat" required style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
         
-        <select id="category" required>
-          <option value="">Kategori Seç</option>
-          <option value="Spor Giyim">Spor Giyim</option>
-          <option value="Judogi">Judogi</option>
-          <option value="Kamp Malzemeleri">Kamp Malzemeleri</option>
-          <option value="Ayakkabı">Ayakkabı</option>
-          <option value="Aksesuarlar">Aksesuarlar</option>
-          <option value="Çocuk Giyim">👶 Çocuk Giyim</option>
-          <option value="Diğer">Diğer</option>
+        <select id="category" required style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+          <option value="">📦 Kategori Seç</option>
+          <option value="Spor Giyim">👕 Spor Giyim</option>
+          <option value="Judogi">🥋 Judogi</option>
+          <option value="Kamp Malzemeleri">🏕️ Kamp Malzemeleri</option>
+          <option value="Ayakkabı">👟 Ayakkabı</option>
+          <option value="Aksesuarlar">📿 Aksesuarlar</option>
+          <option value="Çocuk Giyim">👧 Çocuk Giyim</option>
+          <option value="Diğer">📎 Diğer</option>
         </select>
 
-        <div id="sizeContainer"></div>
+        <div id="sizeContainer" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
 
-        <input type="text" id="barcode" placeholder="Barkod (otomatik oluşturulur)">
-        <input type="text" id="image" placeholder="Resim URL'si">
-        <textarea id="description" placeholder="Ürün Açıklaması"></textarea>
+        <input type="text" id="barcode" placeholder="Barkod (otomatik oluşturulur)" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+        <input type="text" id="image" placeholder="Resim URL'si" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+        <textarea id="description" placeholder="Ürün Açıklaması" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px; min-height: 80px;"></textarea>
 
-        <select id="discountType">
-          <option value="none">İndirim Yok</option>
-          <option value="percentage">Yüzde İndirim (%)</option>
-          <option value="fixed">Sabit İndirim (TL)</option>
-        </select>
-
-        <input type="number" id="discountValue" step="0.01" placeholder="İndirim Değeri" value="0">
-        <input type="text" id="labelText" placeholder="Etiket Notu (örn: Sıcak Fırsat!)">
-
-        <button type="submit" class="btn btn-primary">✅ Ürün Ekle</button>
+        <button type="submit" class="btn btn-primary" style="padding: 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">✅ Ürün Ekle</button>
       </form>
     </div>
 
@@ -42,7 +33,7 @@
         'Judogi': ['100cm', '110cm', '120cm', '130cm', '140cm', '150cm', '160cm', '170cm', '180cm', '190cm', '200cm'],
         'Ayakkabı': ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'],
         'Spor Giyim': ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '4XL', '5XL'],
-        'Çocuk Giyim': ['4 Yaş', '5 Yaş', '6 Yaş', '7 Yaş', '8 Yaş', '9 Yaş', '10 Yaş', '11 Yaş', '12 Yaş', '13 Yaş', '14 Yaş', '15 Yaş', '16 Yaş'],
+        'Çocuk Giyim': ['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16'],
         'Kamp Malzemeleri': ['Tek Boyut'],
         'Aksesuarlar': ['Tek Boyut'],
         'Diğer': ['Tek Boyut']
@@ -54,21 +45,16 @@
         sizeContainer.innerHTML = '';
         
         if (categoryMap[selected]) {
-          const title = document.createElement('div');
-          title.style.marginTop = '15px';
-          title.style.marginBottom = '10px';
-          title.style.fontWeight = 'bold';
-          title.style.color = '#333';
-          title.textContent = 'Bedenler Seç:';
-          sizeContainer.appendChild(title);
-          
           categoryMap[selected].forEach(size => {
             const label = document.createElement('label');
-            label.style.display = 'inline-block';
-            label.style.marginRight = '15px';
-            label.style.marginBottom = '10px';
+            label.style.display = 'flex';
+            label.style.alignItems = 'center';
+            label.style.gap = '5px';
+            label.style.padding = '8px 12px';
+            label.style.backgroundColor = '#f0f0f0';
+            label.style.borderRadius = '4px';
             label.style.cursor = 'pointer';
-            label.innerHTML = `<input type="checkbox" name="sizes" value="${size}" data-size="${size}" style="margin-right: 5px;"> ${size}`;
+            label.innerHTML = `<input type="checkbox" name="sizes" value="${size}" style="cursor: pointer;"> ${selected === 'Çocuk Giyim' ? size + ' Yaş' : size}`;
             sizeContainer.appendChild(label);
           });
         }
@@ -79,7 +65,7 @@
         
         const sizes = Array.from(document.querySelectorAll('input[name="sizes"]:checked')).map(el => el.value);
         if (sizes.length === 0) {
-          alert('Lütfen en az bir beden seçin!');
+          alert('❌ Lütfen en az bir beden seçin!');
           return;
         }
 
@@ -90,10 +76,7 @@
           barcode: document.getElementById('barcode').value || undefined,
           image: document.getElementById('image').value || undefined,
           description: document.getElementById('description').value,
-          sizes: sizes,
-          discountType: document.getElementById('discountType').value,
-          discountValue: parseFloat(document.getElementById('discountValue').value) || 0,
-          labelText: document.getElementById('labelText').value
+          sizes: sizes
         };
 
         try {
@@ -105,15 +88,15 @@
           
           const result = await response.json();
           if (result.success) {
-            alert(result.message);
+            alert('✅ ' + result.message);
             document.getElementById('productForm').reset();
             document.getElementById('sizeContainer').innerHTML = '';
-            setTimeout(() => window.location.href = '/admin-inventory', 1000);
+            setTimeout(() => window.location.href = '/admin/inventory', 1500);
           } else {
-            alert('Hata: ' + result.message);
+            alert('❌ Hata: ' + result.message);
           }
         } catch (error) {
-          alert('Hata: ' + error.message);
+          alert('❌ Hata: ' + error.message);
         }
       });
     </script>

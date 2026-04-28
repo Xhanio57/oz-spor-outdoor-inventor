@@ -1,44 +1,38 @@
 <%- include('layout', { 
   title: 'POS Satış',
   body: `
-    <div class="pos-container">
-      <div class="left">
-        <h2>💰 Satış</h2>
+    <div class="pos-container" style="display: flex; gap: 20px; padding: 20px;">
+      <div class="left" style="flex: 1; border-right: 1px solid #ddd; padding-right: 20px;">
+        <h2 style="margin-bottom: 20px;">💰 Satış</h2>
         
-        <div class="search-section">
-          <input type="text" id="barcodeInput" placeholder="Barkodu oku veya ürün adı/barkod yazarak ara...">
-          <div id="searchResults" class="search-results"></div>
+        <div class="search-section" style="margin-bottom: 20px;">
+          <input type="text" id="barcodeInput" placeholder="Barkodu oku veya ürün adı yazarak ara..." style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px;">
+          <div id="searchResults" style="margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px;"></div>
         </div>
 
         <div id="cartSection" style="display:none;">
           <h3>🛒 Sepet</h3>
-          <div id="cartItems"></div>
-          <div class="cart-summary">
-            <p>Toplam: <strong id="totalPrice">0,00 TL</strong></p>
-            <select id="paymentMethod">
+          <div id="cartItems" style="margin-bottom: 15px; border-top: 2px solid #ddd; padding-top: 10px;"></div>
+          <div class="cart-summary" style="background: #f0f0f0; padding: 15px; border-radius: 4px;">
+            <p style="font-size: 18px; margin-bottom: 15px;">Toplam: <strong id="totalPrice" style="color: #10b981;">0,00 TL</strong></p>
+            <select id="paymentMethod" style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;">
               <option value="Nakit">💵 Nakit</option>
               <option value="Kredi Kartı">💳 Kredi Kartı</option>
               <option value="Çek">📄 Çek</option>
             </select>
-            <button class="btn btn-primary" onclick="completeSale()">✅ Satışı Tamamla</button>
+            <button onclick="completeSale()" class="btn btn-primary" style="width: 100%; padding: 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 16px;">✅ Satışı Tamamla</button>
           </div>
         </div>
       </div>
 
-      <div class="right">
-        <h2>📊 Son Satışlar</h2>
-        <div id="recentSales" class="recent-sales"></div>
+      <div class="right" style="flex: 1;">
+        <h2 style="margin-bottom: 20px;">📊 Son Satışlar</h2>
+        <div id="recentSales" style="border: 1px solid #eee; border-radius: 4px; padding: 15px; max-height: 600px; overflow-y: auto;"></div>
       </div>
     </div>
 
     <script>
-      const categoryLabels = {
-        'Çocuk Giyim': (size) => `${size} Yaş`,
-        'default': (size) => size
-      };
-
       let cart = [];
-      let selectedProduct = null;
 
       document.getElementById('barcodeInput').addEventListener('input', async (e) => {
         const search = e.target.value.toLowerCase();
@@ -52,20 +46,21 @@
           const products = await response.json();
           
           const matches = products.filter(p => 
-            p.barcode.includes(search) || p.name.toLowerCase().includes(search)
+            p.barcode.toLowerCase().includes(search) || p.name.toLowerCase().includes(search)
           );
 
           let html = '';
-          matches.forEach(p => {
-            html += `<div class="product-result" onclick="selectProduct('${p._id}')" style="cursor:pointer;padding:10px;border-bottom:1px solid #ddd;">
-              <strong>${p.name}</strong> - ${p.category}
-              <br><small>${p.barcode} | ${p.price.toFixed(2)} TL</small>
+          matches.slice(0, 5).forEach(p => {
+            html += `<div onclick="selectProduct('${p._id}')" style="padding:10px; border-bottom:1px solid #eee; cursor:pointer; hover-background: #f0f0f0;">
+              <strong>${p.name}</strong> (${p.category})<br>
+              <small>${p.barcode} | ${p.price.toFixed(2)} TL</small>
             </div>`;
           });
           
+          if (matches.length === 0) html = '<div style="padding:10px; color:#999;">Ürün bulunamadı</div>';
           document.getElementById('searchResults').innerHTML = html;
         } catch (error) {
-          console.error('Ürün arama hatası:', error);
+          console.error('Arama hatası:', error);
         }
       });
 
@@ -73,54 +68,51 @@
         try {
           const response = await fetch('/api/products');
           const products = await response.json();
-          selectedProduct = products.find(p => p._id === productId);
+          const product = products.find(p => p._id === productId);
           
           document.getElementById('searchResults').innerHTML = '';
-          document.getElementById('barcodeInput').value = selectedProduct.name;
+          document.getElementById('barcodeInput').value = product.name;
           
-          showSizeSelection();
+          let html = `<h4 style="margin-bottom: 10px;">Beden Seç (${product.name}):</h4>`;
+          product.sizeStock.forEach(s => {
+            const sizeDisplay = product.category === 'Çocuk Giyim' ? (s.size + ' Yaş') : s.size;
+            const disabled = s.stock === 0 ? 'disabled' : '';
+            const btnStyle = s.stock === 0 ? 'background: #ccc; cursor: not-allowed;' : 'background: #2563eb; cursor: pointer;';
+            html += `<button onclick="addToCart('${productId}', '${s.size}')" ${disabled} style="display: block; width: 100%; padding: 8px; margin: 8px 0; color: white; border: none; border-radius: 4px; ${btnStyle}">
+              ${sizeDisplay} (Stok: ${s.stock})
+            </button>`;
+          });
+          
+          document.getElementById('searchResults').innerHTML = html;
         } catch (error) {
           console.error('Ürün yükleme hatası:', error);
         }
       };
 
-      function showSizeSelection() {
-        const sizes = selectedProduct.sizeStock;
-        const formatter = categoryLabels[selectedProduct.category] || categoryLabels['default'];
-        
-        let html = `<h4>Beden Seç (${selectedProduct.name}):</h4>`;
-        sizes.forEach(s => {
-          const display = formatter(s.size);
-          const disabled = s.stock === 0 ? 'disabled' : '';
-          html += `<button onclick="addToCart('${selectedProduct._id}', '${s.size}')" ${disabled} class="btn" style="margin-bottom:5px;">
-            ${display} (Stok: ${s.stock})
-          </button>`;
-        });
-        
-        document.getElementById('searchResults').innerHTML = html;
-      }
-
       window.addToCart = async (productId, size) => {
-        const product = await fetch(`/api/products`).then(r => r.json()).then(ps => ps.find(p => p._id === productId));
-        const sizeItem = product.sizeStock.find(s => s.size === size);
-        const formatter = categoryLabels[product.category] || categoryLabels['default'];
-        
-        cart.push({
-          productId: productId,
-          productName: product.name,
-          category: product.category,
-          size: size,
-          sizeDisplay: formatter(size),
-          price: product.price,
-          quantity: 1
-        });
-        
-        document.getElementById('cartSection').style.display = 'block';
-        document.getElementById('searchResults').innerHTML = '';
-        document.getElementById('barcodeInput').value = '';
-        selectedProduct = null;
-        
-        updateCart();
+        try {
+          const response = await fetch('/api/products');
+          const products = await response.json();
+          const product = products.find(p => p._id === productId);
+          const sizeDisplay = product.category === 'Çocuk Giyim' ? (size + ' Yaş') : size;
+          
+          cart.push({
+            productId: productId,
+            productName: product.name,
+            category: product.category,
+            size: size,
+            sizeDisplay: sizeDisplay,
+            price: product.price,
+            quantity: 1
+          });
+          
+          document.getElementById('cartSection').style.display = 'block';
+          document.getElementById('searchResults').innerHTML = '';
+          document.getElementById('barcodeInput').value = '';
+          updateCart();
+        } catch (error) {
+          console.error('Sepete ekleme hatası:', error);
+        }
       };
 
       function updateCart() {
@@ -130,10 +122,12 @@
         cart.forEach((item, idx) => {
           const itemTotal = item.price * item.quantity;
           total += itemTotal;
-          html += `<div class="cart-item">
-            <span>${item.productName} (${item.sizeDisplay}) x${item.quantity}</span>
-            <span>${itemTotal.toFixed(2)} TL</span>
-            <button onclick="removeFromCart(${idx})" class="btn btn-small">🗑️</button>
+          html += `<div style="padding: 10px; background: white; margin-bottom: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong>${item.productName}</strong><br>
+              <small>${item.sizeDisplay} x${item.quantity} = ${itemTotal.toFixed(2)} TL</small>
+            </div>
+            <button onclick="removeFromCart(${idx})" class="btn btn-small" style="background: #dc2626; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">🗑️</button>
           </div>`;
         });
         
@@ -151,13 +145,13 @@
 
       window.completeSale = async () => {
         if (cart.length === 0) {
-          alert('Sepet boş!');
+          alert('❌ Sepet boş!');
           return;
         }
 
         for (let item of cart) {
           try {
-            await fetch('/api/sales', {
+            const response = await fetch('/api/sales', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -168,8 +162,9 @@
                 cashier: 'POS'
               })
             });
+            if (!response.ok) throw new Error('Satış başarısız');
           } catch (error) {
-            alert('Satış hatası: ' + error.message);
+            alert('❌ Satış hatası: ' + error.message);
             return;
           }
         }
@@ -178,6 +173,7 @@
         cart = [];
         document.getElementById('cartSection').style.display = 'none';
         document.getElementById('cartItems').innerHTML = '';
+        document.getElementById('barcodeInput').value = '';
         loadRecentSales();
       };
 
@@ -187,17 +183,16 @@
           const sales = await response.json();
           
           let html = '';
-          sales.slice(0, 10).forEach(sale => {
-            const formatter = categoryLabels[sale.category] || categoryLabels['default'];
-            const sizeDisplay = formatter(sale.size);
-            html += `<div class="recent-sale-item">
+          sales.slice(0, 15).forEach(sale => {
+            const sizeDisplay = sale.category === 'Çocuk Giyim' ? (sale.size + ' Yaş') : sale.size;
+            const date = new Date(sale.createdAt).toLocaleString('tr-TR');
+            html += `<div style="padding: 12px; border-bottom: 1px solid #eee;">
               <strong>${sale.productName}</strong><br>
-              Beden: ${sizeDisplay} | Miktar: ${sale.quantity}<br>
-              <small>${new Date(sale.createdAt).toLocaleString('tr-TR')}</small>
+              <small>${sizeDisplay} x${sale.quantity} | ${sale.price.toFixed(2)} TL | ${date}</small>
             </div>`;
           });
           
-          document.getElementById('recentSales').innerHTML = html;
+          document.getElementById('recentSales').innerHTML = html || '<p style="color: #999;">Henüz satış yok</p>';
         } catch (error) {
           console.error('Satış geçmişi yükleme hatası:', error);
         }
