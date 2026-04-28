@@ -87,7 +87,7 @@ router.get('/api/products/report-pdf', async (req, res) => {
   }
 });
 
-// PDF Etiket İndir
+// PDF Etiket İndir (beden başına stok adeti kadar etiket)
 router.get('/api/products/:id/label-pdf', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) {
@@ -99,31 +99,62 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
     }
 
+    const isAge = product.category === 'Çocuk Giyim';
+
+    // Her beden için stok adeti kadar etiket oluştur
+    const labelEntries = [];
+    for (const s of product.sizeStock) {
+      const sizeDisplay = isAge ? `${s.size} Yaş` : s.size;
+      const count = Math.max(s.stock, 1); // Stok 0 olsa bile önizleme için 1 etiket
+      for (let i = 0; i < count; i++) {
+        labelEntries.push({ size: s.size, sizeDisplay });
+      }
+    }
+    if (labelEntries.length === 0) {
+      labelEntries.push({ size: '', sizeDisplay: '' });
+    }
+
+    const safeBarcode = product.barcode.replace(/'/g, "\\'");
+    const safeName = product.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const labelDivs = labelEntries.map((entry, i) => `
+      <div class="label" ${i === labelEntries.length - 1 ? 'style="page-break-after:auto;"' : ''}>
+        <img src="${product.image}" alt="${safeName}" class="label-image" onerror="this.src='/images/default-product.svg'">
+        <div class="label-info">
+          <div class="label-name">${safeName}</div>
+          <div class="label-category">${product.category}</div>
+          ${entry.sizeDisplay ? `<div class="label-size">${entry.sizeDisplay}</div>` : ''}
+          <div class="label-price">${product.price.toFixed(2)} ₺</div>
+          <svg class="barcode-slot" style="width:100%;height:40px;"></svg>
+          <div class="label-barcode-text">${product.barcode}</div>
+        </div>
+      </div>
+    `).join('');
+
     const html = `
       <!DOCTYPE html>
       <html lang="tr">
       <head>
         <meta charset="UTF-8">
-        <title>${product.name} - Etiket</title>
+        <title>${safeName} - Etiketler</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
           .label {
             width: 80mm;
-            height: 120mm;
             background: white;
-            padding: 10mm;
-            margin: 0 auto;
+            padding: 8mm;
+            margin: 0 auto 10px;
             border: 1px solid #ddd;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             page-break-after: always;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 6px;
           }
           .label-image {
             width: 100%;
-            height: 50mm;
+            height: 40mm;
             object-fit: cover;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -132,62 +163,67 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
             flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 4px;
           }
           .label-name {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
             color: #333;
             line-height: 1.2;
           }
           .label-category {
-            font-size: 11px;
+            font-size: 10px;
             color: #666;
           }
+          .label-size {
+            font-size: 17px;
+            font-weight: bold;
+            color: #fff;
+            background: #2563eb;
+            padding: 3px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            align-self: flex-start;
+          }
           .label-price {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             color: #2563eb;
           }
-          .label-barcode-img {
-            width: 100%;
-            height: 50px;
-            object-fit: contain;
-            margin: 5px 0;
-          }
           .label-barcode-text {
-            font-size: 10px;
+            font-size: 9px;
             text-align: center;
             font-family: 'Courier New', monospace;
             color: #333;
           }
           @media print {
             body { background: white; padding: 0; }
-            .label { margin: 0; }
+            .label { margin: 0; box-shadow: none; border: none; }
           }
         </style>
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
       </head>
       <body>
-        <div class="label">
-          <img src="${product.image}" alt="${product.name}" class="label-image" onerror="this.src='/images/default-product.svg'">
-          <div class="label-info">
-            <div class="label-name">${product.name}</div>
-            <div class="label-category">${product.category}</div>
-            <div class="label-price">${product.price.toFixed(2)} ₺</div>
-            <svg id="barcode"></svg>
-            <div class="label-barcode-text">${product.barcode}</div>
-          </div>
-        </div>
-
+        <svg id="barcode-template" style="display:none;"></svg>
+        ${labelDivs}
         <script>
-          JsBarcode("#barcode", "${product.barcode}", {
-            format: "CODE128",
-            width: 1.5,
-            height: 50,
-            displayValue: false
-          });
           window.onload = function() {
+            var template = document.getElementById('barcode-template');
+            JsBarcode(template, '${safeBarcode}', {
+              format: 'CODE128',
+              width: 1.5,
+              height: 38,
+              displayValue: false
+            });
+            var slots = document.querySelectorAll('.barcode-slot');
+            slots.forEach(function(slot) {
+              var clone = template.cloneNode(true);
+              clone.removeAttribute('id');
+              clone.style.display = '';
+              clone.style.width = '100%';
+              clone.style.height = '40px';
+              slot.parentNode.replaceChild(clone, slot);
+            });
             window.print();
           };
         </script>
@@ -329,6 +365,57 @@ router.patch('/api/products/:id/size-stock', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Stok güncelleme hatası: ' + error.message });
+  }
+});
+
+// Çoklu beden stok güncelle
+router.patch('/api/products/:id/bulk-size-stock', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz ürün ID' });
+    }
+    const { sizes, quantity } = req.body;
+
+    if (!Array.isArray(sizes) || sizes.length === 0 || quantity === undefined) {
+      return res.status(400).json({ success: false, message: 'Beden listesi ve miktar zorunludur' });
+    }
+
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
+    }
+
+    const qty = parseInt(quantity);
+    const errors = [];
+
+    for (const size of sizes) {
+      const sizeItem = product.sizeStock.find(s => s.size === size);
+      if (!sizeItem) {
+        errors.push(`"${size}" bedeni bulunamadı`);
+        continue;
+      }
+      if (qty < 0 && Math.abs(qty) > sizeItem.stock) {
+        errors.push(`${size}: negatif stok yapılamaz (mevcut: ${sizeItem.stock})`);
+        continue;
+      }
+      sizeItem.stock = Math.max(0, sizeItem.stock + qty);
+    }
+
+    if (errors.length === sizes.length) {
+      return res.status(400).json({ success: false, message: errors.join(' | ') });
+    }
+
+    await product.save();
+
+    const successCount = sizes.length - errors.length;
+    const sign = qty > 0 ? `+${qty}` : String(qty);
+    const msg = errors.length > 0
+      ? `${successCount} beden güncellendi. Hata: ${errors.join(' | ')}`
+      : `${successCount} beden ${sign} stok ile güncellendi`;
+
+    res.json({ success: true, message: msg, product });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Toplu stok güncelleme hatası: ' + error.message });
   }
 });
 

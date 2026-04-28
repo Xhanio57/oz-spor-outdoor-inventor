@@ -46,11 +46,35 @@
 
     <!-- Stok Güncelleme Modal -->
     <div id="stockModal" class="modal hidden">
-      <div class="modal-content" style="max-width:480px;text-align:left;">
+      <div class="modal-content" style="max-width:500px;text-align:left;">
         <button class="close" onclick="closeStockModal()">&times;</button>
-        <h3 id="modalTitle" style="margin-bottom:1rem;color:var(--primary-color);">Stok Güncelle</h3>
-        <div id="sizeStockList" style="display:flex;flex-direction:column;gap:0.75rem;max-height:360px;overflow-y:auto;margin-bottom:1rem;"></div>
-        <button class="btn btn-secondary" onclick="closeStockModal()" style="width:100%;margin-top:0.5rem;">Kapat</button>
+        <h3 id="modalTitle" style="margin-bottom:0.5rem;color:var(--primary-color);">Stok Güncelle</h3>
+        <p style="font-size:0.85rem;color:#6b7280;margin-bottom:1rem;">Birden fazla beden seçip tek seferde güncelleyebilirsiniz.</p>
+
+        <!-- Size checkboxes -->
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem;align-items:center;">
+          <span style="font-size:0.875rem;font-weight:600;color:#374151;">Bedenler:</span>
+          <button type="button" onclick="toggleAllSizes(true)"
+            style="padding:0.25rem 0.6rem;font-size:0.75rem;border:1px solid #d1d5db;background:#f9fafb;border-radius:4px;cursor:pointer;">
+            Tümünü Seç
+          </button>
+          <button type="button" onclick="toggleAllSizes(false)"
+            style="padding:0.25rem 0.6rem;font-size:0.75rem;border:1px solid #d1d5db;background:#f9fafb;border-radius:4px;cursor:pointer;">
+            Temizle
+          </button>
+        </div>
+        <div id="sizeCheckboxGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:0.4rem;margin-bottom:1rem;max-height:280px;overflow-y:auto;"></div>
+
+        <!-- Shared quantity + apply -->
+        <div style="display:flex;gap:0.5rem;align-items:center;padding:0.75rem;background:#f9fafb;border-radius:8px;">
+          <label style="font-weight:600;font-size:0.875rem;white-space:nowrap;">Miktar:</label>
+          <input type="number" id="bulkQtyInput" placeholder="±Adet (örn: 5 veya -2)"
+            style="flex:1;padding:0.5rem 0.6rem;font-size:0.95rem;border:1px solid #d1d5db;border-radius:6px;">
+          <button class="btn btn-primary" id="applyBulkBtn" onclick="applyBulkStock()">
+            ✓ Uygula
+          </button>
+        </div>
+        <button class="btn btn-secondary" onclick="closeStockModal()" style="width:100%;margin-top:0.75rem;">Kapat</button>
       </div>
     </div>
 
@@ -141,52 +165,78 @@
       document.getElementById('searchInput').addEventListener('input', applyFilters);
       document.getElementById('categoryFilter').addEventListener('change', applyFilters);
 
+      let currentModalProductId = null;
+
       function openStockModal(productId) {
         const product = allProducts.find(p => p._id === productId);
         if (!product) return;
 
+        currentModalProductId = productId;
         document.getElementById('modalTitle').textContent = '📦 ' + product.name + ' - Stok Güncelle';
-        const list = document.getElementById('sizeStockList');
+        document.getElementById('bulkQtyInput').value = '';
+
+        const grid = document.getElementById('sizeCheckboxGrid');
         const isAge = product.category === 'Çocuk Giyim';
 
-        list.innerHTML = product.sizeStock.map(s => {
+        grid.innerHTML = product.sizeStock.map(s => {
           const label = isAge ? \`\${s.size} Yaş\` : s.size;
+          const zeroStock = s.stock === 0;
           return \`
-            <div style="display:grid;grid-template-columns:1fr auto auto;gap:0.5rem;align-items:center;padding:0.6rem;background:#f9fafb;border-radius:6px;">
-              <span style="font-weight:500;">\${label}</span>
-              <span style="color:#6b7280;font-size:0.9rem;">Mevcut: <strong>\${s.stock}</strong></span>
-              <div style="display:flex;gap:0.4rem;align-items:center;">
-                <input type="number" id="qty_\${productId}_\${s.size.replace(/ /g, '_')}" placeholder="±Miktar"
-                  style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;" value="">
-                <button class="btn btn-primary btn-small"
-                  onclick="updateStock('\${productId}', '\${s.size}',
-                  document.getElementById('qty_\${productId}_\${s.size.replace(/ /g, '_')}').value)">
-                  Güncelle
-                </button>
-              </div>
-            </div>
+            <label id="sizelbl_\${s.size.replace(/ /g,'_')}"
+              style="display:flex;align-items:center;gap:0.4rem;padding:0.45rem 0.6rem;
+                     background:\${zeroStock ? '#fee2e2' : '#f0fdf4'};
+                     border:2px solid transparent;border-radius:6px;cursor:pointer;
+                     font-size:0.85rem;font-weight:500;transition:border-color 0.15s;">
+              <input type="checkbox" class="size-select-cb" value="\${s.size}"
+                style="width:auto;cursor:pointer;margin:0;"
+                onchange="highlightSizeLabel('\${s.size.replace(/ /g,'_')}')">
+              <span style="flex:1;">\${label}</span>
+              <span style="font-size:0.75rem;color:#6b7280;">\${s.stock}</span>
+            </label>
           \`;
         }).join('');
 
         document.getElementById('stockModal').classList.remove('hidden');
+        document.getElementById('bulkQtyInput').focus();
       }
 
-      function closeStockModal() {
-        document.getElementById('stockModal').classList.add('hidden');
+      function toggleAllSizes(check) {
+        document.querySelectorAll('.size-select-cb').forEach(cb => {
+          cb.checked = check;
+          const lbl = cb.closest('label');
+          if (lbl) lbl.style.borderColor = check ? 'var(--primary-color)' : 'transparent';
+        });
       }
 
-      async function updateStock(productId, size, quantityStr) {
-        const quantity = parseInt(quantityStr);
+      function highlightSizeLabel(sizeKey) {
+        const lbl = document.getElementById(\`sizelbl_\${sizeKey}\`);
+        if (!lbl) return;
+        const cb = lbl.querySelector('input[type=checkbox]');
+        lbl.style.borderColor = cb && cb.checked ? 'var(--primary-color)' : 'transparent';
+      }
+
+      async function applyBulkStock() {
+        const selectedSizes = Array.from(document.querySelectorAll('.size-select-cb:checked')).map(cb => cb.value);
+        const quantity = parseInt(document.getElementById('bulkQtyInput').value);
+
+        if (selectedSizes.length === 0) {
+          showNotification('En az bir beden seçin', 'error');
+          return;
+        }
         if (isNaN(quantity) || quantity === 0) {
           showNotification('Geçerli bir miktar girin (sıfır olamaz)', 'error');
           return;
         }
 
+        const btn = document.getElementById('applyBulkBtn');
+        btn.disabled = true;
+        btn.textContent = '...';
+
         try {
-          const res = await fetch(\`/api/products/\${productId}/size-stock\`, {
+          const res = await fetch(\`/api/products/\${currentModalProductId}/bulk-size-stock\`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ size, quantity })
+            body: JSON.stringify({ sizes: selectedSizes, quantity })
           });
           const data = await res.json();
 
@@ -199,7 +249,15 @@
           }
         } catch (err) {
           showNotification('Hata: ' + err.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '✓ Uygula';
         }
+      }
+
+      function closeStockModal() {
+        document.getElementById('stockModal').classList.add('hidden');
+        currentModalProductId = null;
       }
 
       async function deleteProduct(id, name) {
@@ -228,6 +286,10 @@
 
       document.getElementById('stockModal').addEventListener('click', function(e) {
         if (e.target === this) closeStockModal();
+      });
+
+      document.getElementById('bulkQtyInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') applyBulkStock();
       });
 
       loadProducts();
