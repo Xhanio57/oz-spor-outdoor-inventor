@@ -33,25 +33,25 @@
 
         <div class="form-group">
           <label for="productCategory">Kategori *</label>
-          <select id="productCategory" name="category" required>
+          <select id="productCategory" name="category" required onchange="updateSizeOptions()">
             <option value="">-- Kategori Seçin --</option>
-            <option value="Judo Ürünleri">Judo Ürünleri</option>
             <option value="Spor Giyim">Spor Giyim</option>
-            <option value="Kamp Ekipmanları">Kamp Ekipmanları</option>
+            <option value="Judogi">Judogi</option>
+            <option value="Kamp Malzemeleri">Kamp Malzemeleri</option>
+            <option value="Ayakkabı">Ayakkabı</option>
+            <option value="Aksesuarlar">Aksesuarlar</option>
+            <option value="Çocuk Giyim">Çocuk Giyim</option>
             <option value="Diğer">Diğer</option>
           </select>
         </div>
 
-        <div class="form-group">
-          <label for="productStock">Başlangıç Stoku</label>
-          <input 
-            type="number" 
-            id="productStock" 
-            name="stock" 
-            placeholder="Örn: 50" 
-            min="0"
-            value="0"
-          >
+        <div id="sizeSelectContainer" style="display:none;">
+          <div class="form-group">
+            <label>Beden / Yaş Seçimi</label>
+            <small id="sizeSelectHint" style="margin-bottom:10px;display:block;"></small>
+            <div id="sizeCheckboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;"></div>
+            <small style="margin-top:6px;">Hiç seçmezseniz tüm bedenler otomatik oluşturulur.</small>
+          </div>
         </div>
 
         <div class="form-group">
@@ -91,20 +91,81 @@
     </div>
 
     <script>
+      const CATEGORY_SIZES = {
+        'Judogi': Array.from({length: 11}, (_, i) => (100 + i * 10).toString() + 'cm'),
+        'Ayakkabı': Array.from({length: 11}, (_, i) => (36 + i).toString()),
+        'Spor Giyim': ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '4XL', '5XL'],
+        'Çocuk Giyim': ['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16'],
+        'Kamp Malzemeleri': ['Tek Boyut'],
+        'Aksesuarlar': ['Tek Boyut'],
+        'Diğer': ['Tek Boyut']
+      };
+
+      const SINGLE_SIZE_CATEGORIES = ['Kamp Malzemeleri', 'Aksesuarlar', 'Diğer'];
+
+      function updateSizeOptions() {
+        const category = document.getElementById('productCategory').value;
+        const container = document.getElementById('sizeSelectContainer');
+        const checkboxDiv = document.getElementById('sizeCheckboxes');
+        const hint = document.getElementById('sizeSelectHint');
+
+        if (!category || !CATEGORY_SIZES[category]) {
+          container.style.display = 'none';
+          return;
+        }
+
+        const sizes = CATEGORY_SIZES[category];
+
+        // Tek boyutlu kategoriler için checkbox gösterme
+        if (SINGLE_SIZE_CATEGORIES.includes(category)) {
+          container.style.display = 'none';
+          return;
+        }
+
+        const isAgeCategory = category === 'Çocuk Giyim';
+        hint.textContent = isAgeCategory
+          ? 'Dahil etmek istediğiniz yaş gruplarını seçin (4-16 yaş):'
+          : 'Dahil etmek istediğiniz bedenleri seçin:';
+
+        checkboxDiv.innerHTML = '';
+        sizes.forEach(size => {
+          const label = document.createElement('label');
+          label.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal;padding:4px;';
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = size;
+          checkbox.className = 'size-checkbox';
+          checkbox.style.cssText = 'width:auto;cursor:pointer;';
+          checkbox.checked = true;
+
+          const text = document.createTextNode(isAgeCategory ? size + ' Yaş' : size);
+          label.appendChild(checkbox);
+          label.appendChild(text);
+          checkboxDiv.appendChild(label);
+        });
+
+        container.style.display = 'block';
+      }
+
       const form = document.getElementById('addProductForm');
       const notification = document.getElementById('notification');
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        const category = document.getElementById('productCategory').value;
+        const checkedBoxes = Array.from(document.querySelectorAll('.size-checkbox:checked'));
+        const customSizes = checkedBoxes.length > 0 ? checkedBoxes.map(cb => cb.value) : undefined;
+
         const formData = {
           name: document.getElementById('productName').value,
           price: parseFloat(document.getElementById('productPrice').value),
-          category: document.getElementById('productCategory').value,
-          stock: parseInt(document.getElementById('productStock').value) || 0,
+          category,
           image: document.getElementById('productImage').value.trim() || undefined,
           description: document.getElementById('productDescription').value.trim() || '',
-          barcode: document.getElementById('productBarcode').value.trim() || null
+          barcode: document.getElementById('productBarcode').value.trim() || null,
+          customSizes
         };
 
         try {
@@ -121,6 +182,7 @@
           if (data.success) {
             showNotification(data.message, 'success');
             form.reset();
+            document.getElementById('sizeSelectContainer').style.display = 'none';
           } else {
             showNotification(data.message, 'error');
           }
@@ -141,3 +203,4 @@
     </script>
   ` 
 }) %>
+

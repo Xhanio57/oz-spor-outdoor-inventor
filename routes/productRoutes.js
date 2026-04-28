@@ -12,7 +12,77 @@ router.get('/api/products', async (req, res) => {
   }
 });
 
-// PDF Etiket İndir (Basit versyon)
+// Stok raporu PDF (must be before /:id routes to avoid route conflict)
+router.get('/api/products/report-pdf', async (req, res) => {
+  try {
+    const products = await Product.find().sort({ category: 1, name: 1 });
+
+    const rows = products.map((p, idx) => {
+      const totalStock = p.sizeStock.reduce((sum, s) => sum + s.stock, 0);
+      const sizeDetails = p.sizeStock.map(s => {
+        const label = p.category === 'Çocuk Giyim' ? `${s.size} Yaş` : s.size;
+        return `${label}(${s.stock})`;
+      }).join(', ');
+      const bgColor = idx % 2 === 0 ? '#ffffff' : '#f3f4f6';
+
+      return `
+        <tr style="background-color: ${bgColor};">
+          <td style="padding:8px;text-align:center;">${idx + 1}</td>
+          <td style="padding:8px;">${p.name}</td>
+          <td style="padding:8px;">${p.category}</td>
+          <td style="padding:8px;text-align:center;font-family:monospace;">${p.barcode}</td>
+          <td style="padding:8px;text-align:right;">${p.price.toFixed(2)} TL</td>
+          <td style="padding:8px;text-align:center;color:${totalStock === 0 ? '#dc2626' : totalStock < 10 ? '#f59e0b' : '#10b981'};font-weight:bold;">${totalStock}</td>
+          <td style="padding:8px;font-size:12px;">${sizeDetails}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="tr">
+      <head>
+        <meta charset="UTF-8">
+        <title>Stok Raporu</title>
+        <style>
+          body { font-family: Arial, sans-serif; font-size: 13px; color: #333; }
+          h1 { color: #2563eb; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background: #2563eb; color: white; padding: 10px 8px; text-align: left; }
+          td { border-bottom: 1px solid #e5e7eb; }
+          @media print { body { margin: 20px; } }
+        </style>
+      </head>
+      <body>
+        <h1>📦 Stok Raporu</h1>
+        <p>Tarih: ${new Date().toLocaleDateString('tr-TR')} | Toplam Ürün: ${products.length}</p>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Ürün Adı</th>
+              <th>Kategori</th>
+              <th>Barkod</th>
+              <th>Fiyat</th>
+              <th>Toplam Stok</th>
+              <th>Beden Stokları</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <script>window.onload = function() { window.print(); };</script>
+      </body>
+      </html>
+    `;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Rapor oluşturma hatası: ' + error.message });
+  }
+});
+
+// PDF Etiket İndir
 router.get('/api/products/:id/label-pdf', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -21,7 +91,6 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
     }
 
-    // PDF HTML olarak gönder (tarayıcıda render edilecek)
     const html = `
       <!DOCTYPE html>
       <html lang="tr">
@@ -128,7 +197,7 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
 // Yeni ürün ekle
 router.post('/api/products', async (req, res) => {
   try {
-    const { name, price, category, stock, barcode, image, description } = req.body;
+    const { name, price, category, barcode, image, description, customSizes } = req.body;
 
     if (!name || !price || !category) {
       return res.status(400).json({
@@ -141,11 +210,15 @@ router.post('/api/products', async (req, res) => {
       name,
       price: parseFloat(price),
       category,
-      stock: parseInt(stock) || 0,
       barcode: barcode && barcode.trim() ? barcode.trim() : undefined,
       image: image || undefined,
       description: description || ''
     });
+
+    // Özel beden listesi gönderildiyse (örn. Çocuk Giyim için seçilen yaşlar)
+    if (customSizes && Array.isArray(customSizes) && customSizes.length > 0) {
+      newProduct.sizeStock = customSizes.map(size => ({ size, stock: 0 }));
+    }
 
     await newProduct.save();
 
@@ -171,11 +244,11 @@ router.post('/api/products', async (req, res) => {
 // Ürün güncelle
 router.put('/api/products/:id', async (req, res) => {
   try {
-    const { name, price, category, stock, image, description } = req.body;
+    const { name, price, category, image, description } = req.body;
     
     const product = await Product.findByIdAndUpdate(
       req.params.id,
-      { name, price, category, stock, image, description },
+      { name, price, category, image, description },
       { new: true, runValidators: true }
     );
 
@@ -193,35 +266,51 @@ router.put('/api/products/:id', async (req, res) => {
   }
 });
 
-// Stok güncelle
-router.patch('/api/products/:id/stock', async (req, res) => {
+// Beden bazlı stok güncelle
+router.patch('/api/products/:id/size-stock', async (req, res) => {
   try {
-    const { quantity } = req.body;
-    
-    if (quantity === undefined) {
+    const { size, quantity } = req.body;
+
+    if (!size || quantity === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'Stok miktarı zorunludur'
+        message: 'Beden ve miktar zorunludur'
       });
     }
 
     const product = await Product.findById(req.params.id);
-    
+
     if (!product) {
       return res.status(404).json({ success: false, message: 'Ürün bulunamadı' });
     }
 
-    product.stock += parseInt(quantity);
-    
-    if (product.stock < 0) {
-      product.stock = 0;
+    const sizeItem = product.sizeStock.find(s => s.size === size);
+
+    if (!sizeItem) {
+      return res.status(404).json({ success: false, message: 'Beden bulunamadı' });
+    }
+
+    const qty = parseInt(quantity);
+
+    // Negatif stok kontrolü
+    if (qty < 0 && Math.abs(qty) > sizeItem.stock) {
+      return res.status(400).json({
+        success: false,
+        message: `Negatif stok yapılamaz. Mevcut stok: ${sizeItem.stock}`
+      });
+    }
+
+    sizeItem.stock += qty;
+
+    if (sizeItem.stock < 0) {
+      sizeItem.stock = 0;
     }
 
     await product.save();
 
     res.json({
       success: true,
-      message: `Stok güncellendi. Yeni Stok: ${product.stock}`,
+      message: `${size} bedeninin stoku güncellendi: ${sizeItem.stock}`,
       product
     });
   } catch (error) {
@@ -248,3 +337,5 @@ router.delete('/api/products/:id', async (req, res) => {
 });
 
 module.exports = router;
+
+

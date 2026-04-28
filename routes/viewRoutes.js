@@ -22,6 +22,13 @@ router.get('/pos', (req, res) => {
   });
 });
 
+// Satış Geçmişi
+router.get('/sales-history', (req, res) => {
+  res.render('sales-history', {
+    title: 'Satış Geçmişi'
+  });
+});
+
 // Ana Sayfa (Dashboard)
 router.get('/', (req, res) => {
   res.render('dashboard', {
@@ -30,3 +37,4 @@ router.get('/', (req, res) => {
 });
 
 module.exports = router;
+

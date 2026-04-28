@@ -1,0 +1,236 @@
+<%- include('layout', { 
+  title: 'Stok Listesi',
+  body: `
+    <div class="admin-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;">
+        <h2 style="margin:0;">📊 Stok Listesi</h2>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+          <input type="text" id="searchInput" placeholder="🔍 Ürün veya barkod ara..." style="width:220px;padding:0.6rem 0.9rem;">
+          <select id="categoryFilter" style="padding:0.6rem 0.9rem;width:160px;">
+            <option value="">Tüm Kategoriler</option>
+            <option value="Spor Giyim">Spor Giyim</option>
+            <option value="Judogi">Judogi</option>
+            <option value="Kamp Malzemeleri">Kamp Malzemeleri</option>
+            <option value="Ayakkabı">Ayakkabı</option>
+            <option value="Aksesuarlar">Aksesuarlar</option>
+            <option value="Çocuk Giyim">Çocuk Giyim</option>
+            <option value="Diğer">Diğer</option>
+          </select>
+          <a href="/api/products/report-pdf" target="_blank" class="btn btn-secondary btn-small">🖨️ PDF Rapor</a>
+        </div>
+      </div>
+
+      <div id="notification" class="notification hidden"></div>
+      <div id="statsBar" style="display:flex;gap:1.5rem;margin-bottom:1.5rem;flex-wrap:wrap;"></div>
+
+      <div class="table-wrapper">
+        <table class="inventory-table" id="inventoryTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Ürün Adı</th>
+              <th>Kategori</th>
+              <th>Barkod</th>
+              <th>Fiyat</th>
+              <th>Toplam Stok</th>
+              <th>Beden Stokları</th>
+              <th>İşlemler</th>
+            </tr>
+          </thead>
+          <tbody id="inventoryBody">
+            <tr><td colspan="8" class="text-center">Yükleniyor...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Stok Güncelleme Modal -->
+    <div id="stockModal" class="modal hidden">
+      <div class="modal-content" style="max-width:480px;text-align:left;">
+        <button class="close" onclick="closeStockModal()">&times;</button>
+        <h3 id="modalTitle" style="margin-bottom:1rem;color:var(--primary-color);">Stok Güncelle</h3>
+        <div id="sizeStockList" style="display:flex;flex-direction:column;gap:0.75rem;max-height:360px;overflow-y:auto;margin-bottom:1rem;"></div>
+        <button class="btn btn-secondary" onclick="closeStockModal()" style="width:100%;margin-top:0.5rem;">Kapat</button>
+      </div>
+    </div>
+
+    <script>
+      let allProducts = [];
+
+      async function loadProducts() {
+        try {
+          const res = await fetch('/api/products');
+          allProducts = await res.json();
+          renderTable(allProducts);
+          renderStats(allProducts);
+        } catch (err) {
+          document.getElementById('inventoryBody').innerHTML =
+            '<tr><td colspan="8" class="text-center">Ürünler yüklenemedi</td></tr>';
+        }
+      }
+
+      function renderStats(products) {
+        const total = products.length;
+        const totalStock = products.reduce((s, p) => s + p.sizeStock.reduce((a, b) => a + b.stock, 0), 0);
+        const outOfStock = products.filter(p => p.sizeStock.every(s => s.stock === 0)).length;
+        const bar = document.getElementById('statsBar');
+        bar.innerHTML = [
+          { label: 'Toplam Ürün', value: total, color: '#2563eb' },
+          { label: 'Toplam Stok', value: totalStock, color: '#10b981' },
+          { label: 'Stokta Yok', value: outOfStock, color: '#ef4444' }
+        ].map(s => \`
+          <div style="background:white;padding:0.75rem 1.25rem;border-radius:8px;border-left:4px solid \${s.color};box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+            <div style="font-size:1.4rem;font-weight:bold;color:\${s.color};">\${s.value}</div>
+            <div style="font-size:0.8rem;color:#6b7280;">\${s.label}</div>
+          </div>
+        \`).join('');
+      }
+
+      function renderTable(products) {
+        const tbody = document.getElementById('inventoryBody');
+        if (products.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="text-center">Ürün bulunamadı</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = products.map((p, idx) => {
+          const totalStock = p.sizeStock.reduce((s, i) => s + i.stock, 0);
+          const stockColor = totalStock === 0 ? '#dc2626' : totalStock < 5 ? '#f59e0b' : '#10b981';
+
+          const sizeBadges = p.sizeStock.map(s => {
+            const label = p.category === 'Çocuk Giyim' ? \`\${s.size} Yaş\` : s.size;
+            const bg = s.stock === 0 ? '#fee2e2' : s.stock < 3 ? '#fef3c7' : '#d1fae5';
+            const col = s.stock === 0 ? '#dc2626' : s.stock < 3 ? '#92400e' : '#065f46';
+            return \`<span style="display:inline-block;margin:2px;padding:2px 7px;background:\${bg};color:\${col};border-radius:4px;font-size:11px;font-weight:500;">\${label}: \${s.stock}</span>\`;
+          }).join('');
+
+          return \`
+            <tr>
+              <td style="text-align:center;">\${idx + 1}</td>
+              <td><strong>\${p.name}</strong></td>
+              <td>\${p.category}</td>
+              <td><code>\${p.barcode}</code></td>
+              <td style="text-align:right;">\${p.price.toFixed(2)} ₺</td>
+              <td style="text-align:center;color:\${stockColor};font-weight:bold;">\${totalStock}</td>
+              <td style="max-width:260px;">\${sizeBadges}</td>
+              <td>
+                <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+                  <button class="btn btn-info btn-small" onclick="openStockModal('\${p._id}')">📦 Stok</button>
+                  <a href="/api/products/\${p._id}/label-pdf" target="_blank" class="btn btn-small" style="background:#8b5cf6;color:white;text-decoration:none;">🏷️ Etiket</a>
+                  <button class="btn btn-danger btn-small" onclick="deleteProduct('\${p._id}', '\${p.name.replace(/'/g, String.fromCharCode(39))}')">🗑️</button>
+                </div>
+              </td>
+            </tr>
+          \`;
+        }).join('');
+      }
+
+      function applyFilters() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const cat = document.getElementById('categoryFilter').value;
+        const filtered = allProducts.filter(p => {
+          const matchSearch = !search ||
+            p.name.toLowerCase().includes(search) ||
+            (p.barcode && p.barcode.toLowerCase().includes(search));
+          const matchCat = !cat || p.category === cat;
+          return matchSearch && matchCat;
+        });
+        renderTable(filtered);
+      }
+
+      document.getElementById('searchInput').addEventListener('input', applyFilters);
+      document.getElementById('categoryFilter').addEventListener('change', applyFilters);
+
+      function openStockModal(productId) {
+        const product = allProducts.find(p => p._id === productId);
+        if (!product) return;
+
+        document.getElementById('modalTitle').textContent = '📦 ' + product.name + ' - Stok Güncelle';
+        const list = document.getElementById('sizeStockList');
+        const isAge = product.category === 'Çocuk Giyim';
+
+        list.innerHTML = product.sizeStock.map(s => {
+          const label = isAge ? \`\${s.size} Yaş\` : s.size;
+          return \`
+            <div style="display:grid;grid-template-columns:1fr auto auto;gap:0.5rem;align-items:center;padding:0.6rem;background:#f9fafb;border-radius:6px;">
+              <span style="font-weight:500;">\${label}</span>
+              <span style="color:#6b7280;font-size:0.9rem;">Mevcut: <strong>\${s.stock}</strong></span>
+              <div style="display:flex;gap:0.4rem;align-items:center;">
+                <input type="number" id="qty_\${productId}_\${s.size.replace(/ /g, '_')}" placeholder="±Miktar"
+                  style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;" value="">
+                <button class="btn btn-primary btn-small"
+                  onclick="updateStock('\${productId}', '\${s.size}',
+                  document.getElementById('qty_\${productId}_\${s.size.replace(/ /g, '_')}').value)">
+                  Güncelle
+                </button>
+              </div>
+            </div>
+          \`;
+        }).join('');
+
+        document.getElementById('stockModal').classList.remove('hidden');
+      }
+
+      function closeStockModal() {
+        document.getElementById('stockModal').classList.add('hidden');
+      }
+
+      async function updateStock(productId, size, quantityStr) {
+        const quantity = parseInt(quantityStr);
+        if (isNaN(quantity) || quantity === 0) {
+          showNotification('Geçerli bir miktar girin (sıfır olamaz)', 'error');
+          return;
+        }
+
+        try {
+          const res = await fetch(\`/api/products/\${productId}/size-stock\`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ size, quantity })
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            showNotification(data.message, 'success');
+            await loadProducts();
+            closeStockModal();
+          } else {
+            showNotification(data.message, 'error');
+          }
+        } catch (err) {
+          showNotification('Hata: ' + err.message, 'error');
+        }
+      }
+
+      async function deleteProduct(id, name) {
+        if (!confirm('"' + name + '" ürününü silmek istediğinize emin misiniz?')) return;
+        try {
+          const res = await fetch('/api/products/' + id, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            showNotification(data.message, 'success');
+            await loadProducts();
+          } else {
+            showNotification(data.message, 'error');
+          }
+        } catch (err) {
+          showNotification('Hata: ' + err.message, 'error');
+        }
+      }
+
+      function showNotification(message, type) {
+        const n = document.getElementById('notification');
+        n.textContent = message;
+        n.className = 'notification ' + type;
+        n.classList.remove('hidden');
+        setTimeout(() => n.classList.add('hidden'), 5000);
+      }
+
+      document.getElementById('stockModal').addEventListener('click', function(e) {
+        if (e.target === this) closeStockModal();
+      });
+
+      loadProducts();
+    </script>
+  `
+}) %>

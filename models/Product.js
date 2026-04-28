@@ -13,6 +13,11 @@ const generateUniqueBarcode = async () => {
   return barcode;
 };
 
+const sizeStockSchema = new mongoose.Schema({
+  size: String,
+  stock: { type: Number, default: 0, min: 0 }
+}, { _id: false });
+
 const productSchema = new mongoose.Schema(
   {
     name: {
@@ -27,11 +32,6 @@ const productSchema = new mongoose.Schema(
       sparse: true,
       trim: true
     },
-    stock: {
-      type: Number,
-      default: 0,
-      min: [0, 'Stok negatif olamaz']
-    },
     price: {
       type: Number,
       required: [true, 'Fiyat zorunludur'],
@@ -40,9 +40,10 @@ const productSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, 'Kategori zorunludur'],
-      enum: ['Judo Ürünleri', 'Spor Giyim', 'Kamp Ekipmanları', 'Diğer'],
+      enum: ['Spor Giyim', 'Judogi', 'Kamp Malzemeleri', 'Ayakkabı', 'Aksesuarlar', 'Çocuk Giyim', 'Diğer'],
       default: 'Diğer'
     },
+    sizeStock: [sizeStockSchema],
     image: {
       type: String,
       default: '/images/default-product.png'
@@ -57,11 +58,31 @@ const productSchema = new mongoose.Schema(
   }
 );
 
+const CATEGORY_SIZES = {
+  'Judogi': Array.from({ length: 11 }, (_, i) => (100 + i * 10).toString() + 'cm'),
+  'Ayakkabı': Array.from({ length: 11 }, (_, i) => (36 + i).toString()),
+  'Spor Giyim': ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '4XL', '5XL'],
+  'Çocuk Giyim': ['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16'],
+  'Kamp Malzemeleri': ['Tek Boyut'],
+  'Aksesuarlar': ['Tek Boyut'],
+  'Diğer': ['Tek Boyut']
+};
+
 productSchema.pre('save', async function (next) {
   if (!this.barcode) {
     this.barcode = await generateUniqueBarcode();
   }
+
+  if (!this.sizeStock || this.sizeStock.length === 0) {
+    const sizes = CATEGORY_SIZES[this.category] || ['Tek Boyut'];
+    this.sizeStock = sizes.map(size => ({ size, stock: 0 }));
+  }
+
   next();
+});
+
+productSchema.virtual('totalStock').get(function () {
+  return this.sizeStock.reduce((total, item) => total + item.stock, 0);
 });
 
 module.exports = mongoose.model('Product', productSchema);
