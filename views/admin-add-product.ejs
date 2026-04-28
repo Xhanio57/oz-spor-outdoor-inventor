@@ -1,4 +1,121 @@
 <%- include('layout', { 
   title: 'Ürün Ekle',
-  body: `<div class="form-container"><h2>➕ Yeni Ürün Ekle</h2><form id="productForm"><input type="text" id="name" placeholder="Ürün Adı" required><input type="number" id="price" step="0.01" placeholder="Fiyat" required><select id="category" required><option value="">Kategori Seç</option><option value="Spor Giyim">Spor Giyim</option><option value="Judogi">Judogi</option><option value="Kamp Malzemeleri">Kamp Malzemeleri</option><option value="Ayakkabı">Ayakkabı</option><option value="Aksesuarlar">Aksesuarlar</option><option value="Diğer">Diğer</option></select><input type="text" id="image" placeholder="Resim URL (opsiyonel)"><input type="text" id="barcode" placeholder="Barkod (otomatik oluşturulabilir)"><textarea id="description" placeholder="Açıklama (opsiyonel)"></textarea><button type="submit" class="btn btn-primary">Ürün Ekle</button></form><div id="message"></div></div><style>.form-container{max-width:600px;margin:0 auto;background:white;padding:30px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}h2{margin-bottom:25px;color:#333}.form-container input,.form-container select,.form-container textarea{width:100%;padding:12px;margin-bottom:15px;border:1px solid #ddd;border-radius:6px;font-size:14px;box-sizing:border-box;font-family:inherit}.form-container textarea{min-height:100px;resize:vertical}#message{margin-top:20px;padding:15px;border-radius:6px;display:none}#message.success{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;display:block}#message.error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;display:block}</style><script>document.getElementById('productForm').addEventListener('submit',async(e)=>{e.preventDefault();const form=document.getElementById('productForm');const messageDiv=document.getElementById('message');try{const response=await fetch('/api/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('name').value,price:document.getElementById('price').value,category:document.getElementById('category').value,image:document.getElementById('image').value,barcode:document.getElementById('barcode').value,description:document.getElementById('description').value})});const data=await response.json();if(response.ok){messageDiv.className='success';messageDiv.textContent='✅ '+data.message;form.reset();setTimeout(()=>{messageDiv.style.display='none'},3000)}else{messageDiv.className='error';messageDiv.textContent='❌ '+data.message}}catch(error){messageDiv.className='error';messageDiv.textContent='❌ Hata: '+error.message}});<\/script>` 
+  body: `
+    <div class="form-container">
+      <h2>➕ Yeni Ürün Ekle</h2>
+      <form id="productForm">
+        <input type="text" id="name" placeholder="Ürün Adı" required>
+        <input type="number" id="price" step="0.01" placeholder="Fiyat" required>
+        
+        <select id="category" required>
+          <option value="">Kategori Seç</option>
+          <option value="Spor Giyim">Spor Giyim</option>
+          <option value="Judogi">Judogi</option>
+          <option value="Kamp Malzemeleri">Kamp Malzemeleri</option>
+          <option value="Ayakkabı">Ayakkabı</option>
+          <option value="Aksesuarlar">Aksesuarlar</option>
+          <option value="Çocuk Giyim">👶 Çocuk Giyim</option>
+          <option value="Diğer">Diğer</option>
+        </select>
+
+        <div id="sizeContainer"></div>
+
+        <input type="text" id="barcode" placeholder="Barkod (otomatik oluşturulur)">
+        <input type="text" id="image" placeholder="Resim URL'si">
+        <textarea id="description" placeholder="Ürün Açıklaması"></textarea>
+
+        <select id="discountType">
+          <option value="none">İndirim Yok</option>
+          <option value="percentage">Yüzde İndirim (%)</option>
+          <option value="fixed">Sabit İndirim (TL)</option>
+        </select>
+
+        <input type="number" id="discountValue" step="0.01" placeholder="İndirim Değeri" value="0">
+        <input type="text" id="labelText" placeholder="Etiket Notu (örn: Sıcak Fırsat!)">
+
+        <button type="submit" class="btn btn-primary">✅ Ürün Ekle</button>
+      </form>
+    </div>
+
+    <script>
+      const categoryMap = {
+        'Judogi': ['100cm', '110cm', '120cm', '130cm', '140cm', '150cm', '160cm', '170cm', '180cm', '190cm', '200cm'],
+        'Ayakkabı': ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'],
+        'Spor Giyim': ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '4XL', '5XL'],
+        'Çocuk Giyim': ['4 Yaş', '5 Yaş', '6 Yaş', '7 Yaş', '8 Yaş', '9 Yaş', '10 Yaş', '11 Yaş', '12 Yaş', '13 Yaş', '14 Yaş', '15 Yaş', '16 Yaş'],
+        'Kamp Malzemeleri': ['Tek Boyut'],
+        'Aksesuarlar': ['Tek Boyut'],
+        'Diğer': ['Tek Boyut']
+      };
+
+      document.getElementById('category').addEventListener('change', function() {
+        const selected = this.value;
+        const sizeContainer = document.getElementById('sizeContainer');
+        sizeContainer.innerHTML = '';
+        
+        if (categoryMap[selected]) {
+          const title = document.createElement('div');
+          title.style.marginTop = '15px';
+          title.style.marginBottom = '10px';
+          title.style.fontWeight = 'bold';
+          title.style.color = '#333';
+          title.textContent = 'Bedenler Seç:';
+          sizeContainer.appendChild(title);
+          
+          categoryMap[selected].forEach(size => {
+            const label = document.createElement('label');
+            label.style.display = 'inline-block';
+            label.style.marginRight = '15px';
+            label.style.marginBottom = '10px';
+            label.style.cursor = 'pointer';
+            label.innerHTML = `<input type="checkbox" name="sizes" value="${size}" data-size="${size}" style="margin-right: 5px;"> ${size}`;
+            sizeContainer.appendChild(label);
+          });
+        }
+      });
+
+      document.getElementById('productForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const sizes = Array.from(document.querySelectorAll('input[name="sizes"]:checked')).map(el => el.value);
+        if (sizes.length === 0) {
+          alert('Lütfen en az bir beden seçin!');
+          return;
+        }
+
+        const product = {
+          name: document.getElementById('name').value,
+          price: parseFloat(document.getElementById('price').value),
+          category: document.getElementById('category').value,
+          barcode: document.getElementById('barcode').value || undefined,
+          image: document.getElementById('image').value || undefined,
+          description: document.getElementById('description').value,
+          sizes: sizes,
+          discountType: document.getElementById('discountType').value,
+          discountValue: parseFloat(document.getElementById('discountValue').value) || 0,
+          labelText: document.getElementById('labelText').value
+        };
+
+        try {
+          const response = await fetch('/api/products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(product)
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            alert(result.message);
+            document.getElementById('productForm').reset();
+            document.getElementById('sizeContainer').innerHTML = '';
+            setTimeout(() => window.location.href = '/admin-inventory', 1000);
+          } else {
+            alert('Hata: ' + result.message);
+          }
+        } catch (error) {
+          alert('Hata: ' + error.message);
+        }
+      });
+    </script>
+  `
 }) %>

@@ -1,4 +1,210 @@
 <%- include('layout', { 
   title: 'POS Satış',
-  body: `<div class="pos-container"><div class="left"><h2>💰 Satış</h2><div class="search-section"><input type="text" id="barcodeInput" placeholder="Barkodu oku veya ürün adı/barkod yazarak ara..." class="barcode-input" autofocus><input type="text" id="search" placeholder="Ürün adı ara..." class="inp"></div><div id="list" class="list"></div></div><div class="right"><h2>Fiş</h2><table class="tbl"><thead><tr><th>Ürün</th><th>Beden</th><th>Adet</th><th>Fiyat</th><th>Total</th><th></th></tr></thead><tbody id="cart"></tbody></table><div class="tot"><strong>Toplam: <span id="sum">0.00</span> ₺</strong></div><select id="pay"><option>Nakit</option><option>Kart</option><option>Çek</option></select><button onclick="checkout()" class="btn">Ödeme</button></div></div><div id="m1" class="modal hidden"><div class="modal-content"><span class="close" onclick="closeModal()">&times;</span><h3>Beden Seç</h3><div id="sizes" class="sizes"></div><input type="number" id="qty" min="1" value="1" class="inp"><button onclick="addToCart()" class="btn">Sepete Ekle</button></div></div><style>.pos-container{display:grid;grid-template-columns:2fr 1fr;gap:20px;padding:20px;min-height:calc(100vh - 100px)}.left,.right{background:white;padding:20px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}.left h2,.right h2{margin-bottom:15px}.search-section{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}.barcode-input{padding:12px;border:2px solid #2563eb;border-radius:6px;font-size:16px;background:#f0f7ff}.barcode-input:focus{outline:none;border-color:#1d4ed8;box-shadow:0 0 5px rgba(37,99,235,0.3)}.barcode-input.processing{background:#fff4e6;border-color:#f59e0b}.inp{padding:10px;border:1px solid #ddd;border-radius:6px}.list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-height:600px;overflow-y:auto}.item{border:1px solid #ddd;padding:10px;border-radius:6px;cursor:pointer;transition:0.3s;background:white}.item:hover{box-shadow:0 2px 8px rgba(0,0,0,0.1);border-color:#2563eb}.item img{width:100%;height:100px;object-fit:cover;border-radius:4px;margin-bottom:8px}.item h4{font-size:12px;margin:5px 0;color:#333}.item p{font-size:11px;color:#666;margin:3px 0}.item .price{font-weight:bold;color:#2563eb;margin:5px 0}.item .stock{font-size:10px;color:#999}.right{display:flex;flex-direction:column}.tbl{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:15px;flex:1}.tbl th{background:#f5f5f5;padding:8px;text-align:left;border-bottom:2px solid #ddd}.tbl td{padding:8px;border-bottom:1px solid #eee}.tbl input{width:50px;padding:4px}.tbl .btn-del{background:#dc2626;color:white;border:0;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:10px}.tot{font-weight:bold;font-size:14px;color:#2563eb;padding:10px 0;border-top:2px solid #ddd;margin-bottom:10px}#pay{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-bottom:10px}.btn{width:100%;padding:12px;background:#2563eb;color:white;border:0;border-radius:6px;cursor:pointer;font-weight:bold;font-size:14px}.btn:hover{background:#1d4ed8}.modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.4)}.modal:not(.hidden){display:flex;align-items:center;justify-content:center}.modal-content{background:white;padding:30px;border-radius:8px;width:90%;max-width:400px;box-shadow:0 4px 6px rgba(0,0,0,0.1)}.modal-content h3{margin-bottom:20px}.close{float:right;font-size:28px;font-weight:bold;color:#999;cursor:pointer}.close:hover{color:#333}.sizes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:15px}.size-btn{padding:10px;border:2px solid #ddd;background:white;border-radius:4px;cursor:pointer;font-weight:500}.size-btn:hover{border-color:#2563eb}.size-btn.active{background:#2563eb;color:white;border-color:#2563eb}</style><script>let prods=[];let cart=[];let selectedProduct=null;let selectedSize=null;let isProcessing=false;async function init(){try{const r=await fetch('/api/products');prods=await r.json();show()}catch(e){console.error(e);alert('Ürünler yüklenemedi')}}function show(){const s=document.getElementById('search').value.toLowerCase();const f=prods.filter(p=>p.name.toLowerCase().includes(s));const list=document.getElementById('list');list.innerHTML=f.map(p=>{const tot=p.sizeStock.reduce((a,b)=>a+b.stock,0);return '<div class="item" onclick="openSizeModal(event)"><img src="'+p.image+'" onerror="this.src=\\'/images/default-product.svg\\'"><h4>'+p.name+'<\/h4><p>'+p.category+'<\/p><p class="price">'+p.price.toFixed(2)+' ₺<\/p><p class="stock">Stok: '+tot+'<\/p><input type="hidden" value="'+p._id+'"><\/div>'}).join('')}function openSizeModal(event){const id=event.currentTarget.querySelector('input').value;selectedProduct=prods.find(x=>x._id===id);if(!selectedProduct){alert('Ürün bulunamadı');return}selectedSize=null;const sb=document.getElementById('sizes');sb.innerHTML=selectedProduct.sizeStock.map(s=>'<button type="button" class="size-btn" onclick="selectSize(\\''+s.size+'\\')" data-size="'+s.size+'">'+s.size+' ('+s.stock+')<\/button>').join('');document.getElementById('m1').classList.remove('hidden');document.getElementById('qty').focus()}function selectSize(s){selectedSize=s;document.querySelectorAll('.size-btn').forEach(b=>{if(b.getAttribute('data-size')===s){b.classList.add('active')}else{b.classList.remove('active')}})}function addToCart(){if(!selectedSize){alert('Beden seçin');return}const qty=parseInt(document.getElementById('qty').value);if(!qty||qty<1){alert('Geçerli miktar girin');return}const sizeItem=selectedProduct.sizeStock.find(s=>s.size===selectedSize);if(!sizeItem||sizeItem.stock<qty){alert('Yeterli stok yok');return}const c=cart.find(x=>x.id===selectedProduct._id&&x.size===selectedSize);if(c){c.qty+=qty}else{cart.push({id:selectedProduct._id,name:selectedProduct.name,price:selectedProduct.price,size:selectedSize,qty:qty})}closeModal();updateCart()}function updateCart(){const cb=document.getElementById('cart');const su=document.getElementById('sum');cb.innerHTML=cart.map((c,i)=>'<tr><td>'+c.name+'<\/td><td>'+c.size+'<\/td><td><input type="number" min="1" value="'+c.qty+'" onchange="updateQty('+i+',this.value)"><\/td><td>'+c.price.toFixed(2)+' ₺<\/td><td>'+(c.price*c.qty).toFixed(2)+' ₺<\/td><td><button class="btn-del" onclick="removeCart('+i+')">Sil<\/button><\/td><\/tr>').join('');const t=cart.reduce((a,c)=>a+(c.price*c.qty),0);su.textContent=t.toFixed(2)}function updateQty(i,val){cart[i].qty=parseInt(val)||1;updateCart()}function removeCart(i){cart.splice(i,1);updateCart()}async function checkout(){if(cart.length===0){alert('Sepet boş');return}for(const c of cart){const p=prods.find(x=>x._id===c.id);if(!p){alert('Ürün bulunamadı: '+c.name);return}const sz=p.sizeStock.find(s=>s.size===c.size);if(!sz){alert('Beden bulunamadı: '+c.name+' - '+c.size);return}if(sz.stock<c.qty){alert('Stok yetersiz: '+c.name+' '+c.size+' (Mevcut: '+sz.stock+')');return}try{const res=await fetch('/api/sales',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({productId:c.id,size:c.size,quantity:c.qty})});if(!res.ok){const err=await res.json();alert('Hata: '+err.message);return}}catch(e){alert('Satış hatası: '+e.message);return}}alert('✅ Ödeme alındı!');cart=[];updateCart();init()}function closeModal(){document.getElementById('m1').classList.add('hidden');document.getElementById('qty').value='1';document.getElementById('barcodeInput').focus()}const barcodeInput=document.getElementById('barcodeInput');barcodeInput.addEventListener('keydown',function(e){if(e.keyCode===13||e.which===13){e.preventDefault();e.stopImmediatePropagation();if(isProcessing)return;const barcode=this.value.trim();if(barcode.length>0){isProcessing=true;this.classList.add('processing');searchByBarcode(barcode);this.value=''}}});document.getElementById('search').addEventListener('keyup',show);async function searchByBarcode(barcode){try{const product=prods.find(p=>p.barcode===barcode);if(!product){alert('Ürün bulunamadı: '+barcode);document.getElementById('barcodeInput').classList.remove('processing');isProcessing=false;document.getElementById('barcodeInput').focus();return}selectedProduct=product;selectedSize=null;const sb=document.getElementById('sizes');sb.innerHTML=selectedProduct.sizeStock.map(s=>'<button type="button" class="size-btn" onclick="selectSize(\\''+s.size+'\\')" data-size="'+s.size+'">'+s.size+' ('+s.stock+')<\/button>').join('');document.getElementById('m1').classList.remove('hidden');document.getElementById('barcodeInput').value='';document.getElementById('barcodeInput').classList.remove('processing');document.getElementById('qty').value='1';isProcessing=false}catch(error){console.error('Barkod hatası:',error);alert('Hata: '+error.message);document.getElementById('barcodeInput').classList.remove('processing');isProcessing=false}}init()<\/script>` 
+  body: `
+    <div class="pos-container">
+      <div class="left">
+        <h2>💰 Satış</h2>
+        
+        <div class="search-section">
+          <input type="text" id="barcodeInput" placeholder="Barkodu oku veya ürün adı/barkod yazarak ara...">
+          <div id="searchResults" class="search-results"></div>
+        </div>
+
+        <div id="cartSection" style="display:none;">
+          <h3>🛒 Sepet</h3>
+          <div id="cartItems"></div>
+          <div class="cart-summary">
+            <p>Toplam: <strong id="totalPrice">0,00 TL</strong></p>
+            <select id="paymentMethod">
+              <option value="Nakit">💵 Nakit</option>
+              <option value="Kredi Kartı">💳 Kredi Kartı</option>
+              <option value="Çek">📄 Çek</option>
+            </select>
+            <button class="btn btn-primary" onclick="completeSale()">✅ Satışı Tamamla</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <h2>📊 Son Satışlar</h2>
+        <div id="recentSales" class="recent-sales"></div>
+      </div>
+    </div>
+
+    <script>
+      const categoryLabels = {
+        'Çocuk Giyim': (size) => `${size} Yaş`,
+        'default': (size) => size
+      };
+
+      let cart = [];
+      let selectedProduct = null;
+
+      document.getElementById('barcodeInput').addEventListener('input', async (e) => {
+        const search = e.target.value.toLowerCase();
+        if (search.length < 1) {
+          document.getElementById('searchResults').innerHTML = '';
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/products');
+          const products = await response.json();
+          
+          const matches = products.filter(p => 
+            p.barcode.includes(search) || p.name.toLowerCase().includes(search)
+          );
+
+          let html = '';
+          matches.forEach(p => {
+            html += `<div class="product-result" onclick="selectProduct('${p._id}')" style="cursor:pointer;padding:10px;border-bottom:1px solid #ddd;">
+              <strong>${p.name}</strong> - ${p.category}
+              <br><small>${p.barcode} | ${p.price.toFixed(2)} TL</small>
+            </div>`;
+          });
+          
+          document.getElementById('searchResults').innerHTML = html;
+        } catch (error) {
+          console.error('Ürün arama hatası:', error);
+        }
+      });
+
+      window.selectProduct = async (productId) => {
+        try {
+          const response = await fetch('/api/products');
+          const products = await response.json();
+          selectedProduct = products.find(p => p._id === productId);
+          
+          document.getElementById('searchResults').innerHTML = '';
+          document.getElementById('barcodeInput').value = selectedProduct.name;
+          
+          showSizeSelection();
+        } catch (error) {
+          console.error('Ürün yükleme hatası:', error);
+        }
+      };
+
+      function showSizeSelection() {
+        const sizes = selectedProduct.sizeStock;
+        const formatter = categoryLabels[selectedProduct.category] || categoryLabels['default'];
+        
+        let html = `<h4>Beden Seç (${selectedProduct.name}):</h4>`;
+        sizes.forEach(s => {
+          const display = formatter(s.size);
+          const disabled = s.stock === 0 ? 'disabled' : '';
+          html += `<button onclick="addToCart('${selectedProduct._id}', '${s.size}')" ${disabled} class="btn" style="margin-bottom:5px;">
+            ${display} (Stok: ${s.stock})
+          </button>`;
+        });
+        
+        document.getElementById('searchResults').innerHTML = html;
+      }
+
+      window.addToCart = async (productId, size) => {
+        const product = await fetch(`/api/products`).then(r => r.json()).then(ps => ps.find(p => p._id === productId));
+        const sizeItem = product.sizeStock.find(s => s.size === size);
+        const formatter = categoryLabels[product.category] || categoryLabels['default'];
+        
+        cart.push({
+          productId: productId,
+          productName: product.name,
+          category: product.category,
+          size: size,
+          sizeDisplay: formatter(size),
+          price: product.price,
+          quantity: 1
+        });
+        
+        document.getElementById('cartSection').style.display = 'block';
+        document.getElementById('searchResults').innerHTML = '';
+        document.getElementById('barcodeInput').value = '';
+        selectedProduct = null;
+        
+        updateCart();
+      };
+
+      function updateCart() {
+        let html = '';
+        let total = 0;
+        
+        cart.forEach((item, idx) => {
+          const itemTotal = item.price * item.quantity;
+          total += itemTotal;
+          html += `<div class="cart-item">
+            <span>${item.productName} (${item.sizeDisplay}) x${item.quantity}</span>
+            <span>${itemTotal.toFixed(2)} TL</span>
+            <button onclick="removeFromCart(${idx})" class="btn btn-small">🗑️</button>
+          </div>`;
+        });
+        
+        document.getElementById('cartItems').innerHTML = html;
+        document.getElementById('totalPrice').textContent = total.toFixed(2).replace('.', ',') + ' TL';
+      }
+
+      window.removeFromCart = (idx) => {
+        cart.splice(idx, 1);
+        if (cart.length === 0) {
+          document.getElementById('cartSection').style.display = 'none';
+        }
+        updateCart();
+      };
+
+      window.completeSale = async () => {
+        if (cart.length === 0) {
+          alert('Sepet boş!');
+          return;
+        }
+
+        for (let item of cart) {
+          try {
+            await fetch('/api/sales', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productId: item.productId,
+                size: item.size,
+                quantity: item.quantity,
+                paymentMethod: document.getElementById('paymentMethod').value,
+                cashier: 'POS'
+              })
+            });
+          } catch (error) {
+            alert('Satış hatası: ' + error.message);
+            return;
+          }
+        }
+        
+        alert('✅ Satış başarılı!');
+        cart = [];
+        document.getElementById('cartSection').style.display = 'none';
+        document.getElementById('cartItems').innerHTML = '';
+        loadRecentSales();
+      };
+
+      async function loadRecentSales() {
+        try {
+          const response = await fetch('/api/sales-history');
+          const sales = await response.json();
+          
+          let html = '';
+          sales.slice(0, 10).forEach(sale => {
+            const formatter = categoryLabels[sale.category] || categoryLabels['default'];
+            const sizeDisplay = formatter(sale.size);
+            html += `<div class="recent-sale-item">
+              <strong>${sale.productName}</strong><br>
+              Beden: ${sizeDisplay} | Miktar: ${sale.quantity}<br>
+              <small>${new Date(sale.createdAt).toLocaleString('tr-TR')}</small>
+            </div>`;
+          });
+          
+          document.getElementById('recentSales').innerHTML = html;
+        } catch (error) {
+          console.error('Satış geçmişi yükleme hatası:', error);
+        }
+      }
+
+      loadRecentSales();
+      setInterval(loadRecentSales, 5000);
+    </script>
+  `
 }) %>
