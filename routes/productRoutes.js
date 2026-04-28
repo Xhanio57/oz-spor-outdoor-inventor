@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Product = require('../models/Product');
+
+function isValidId(id) {
+  return mongoose.Types.ObjectId.isValid(id);
+}
 
 // Tüm ürünleri listele
 router.get('/api/products', async (req, res) => {
@@ -85,6 +90,9 @@ router.get('/api/products/report-pdf', async (req, res) => {
 // PDF Etiket İndir
 router.get('/api/products/:id/label-pdf', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz ürün ID' });
+    }
     const product = await Product.findById(req.params.id);
     
     if (!product) {
@@ -244,6 +252,9 @@ router.post('/api/products', async (req, res) => {
 // Ürün güncelle
 router.put('/api/products/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz ürün ID' });
+    }
     const { name, price, category, image, description } = req.body;
     
     const product = await Product.findByIdAndUpdate(
@@ -269,6 +280,9 @@ router.put('/api/products/:id', async (req, res) => {
 // Beden bazlı stok güncelle
 router.patch('/api/products/:id/size-stock', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz ürün ID' });
+    }
     const { size, quantity } = req.body;
 
     if (!size || quantity === undefined) {
@@ -321,6 +335,9 @@ router.patch('/api/products/:id/size-stock', async (req, res) => {
 // Ürün sil
 router.delete('/api/products/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz ürün ID' });
+    }
     const product = await Product.findByIdAndDelete(req.params.id);
 
     if (!product) {
@@ -337,5 +354,3 @@ router.delete('/api/products/:id', async (req, res) => {
 });
 
 module.exports = router;
-
-

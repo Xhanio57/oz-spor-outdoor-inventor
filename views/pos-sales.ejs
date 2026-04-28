@@ -199,7 +199,7 @@
       });
 
       function addToCart(product, size) {
-        const cartKey = product._id + '_' + size;
+        const cartKey = \`\${product._id}_\${size}\`;
         const existingItem = cart.find(item => item._cartKey === cartKey);
         const sizeItem = product.sizeStock.find(s => s.size === size);
         const availableStock = sizeItem ? sizeItem.stock : 0;
