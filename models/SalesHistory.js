@@ -8,6 +8,7 @@ const salesHistorySchema = new mongoose.Schema(
       required: true
     },
     productName: String,
+    category: String,
     size: String,
     quantity: {
       type: Number,

@@ -39,12 +39,25 @@ router.post('/api/sales', async (req, res) => {
       });
     }
 
-    sizeItem.stock -= parseInt(quantity);
+    // Negatif stok kontrolü
+    const newStock = sizeItem.stock - parseInt(quantity);
+    if (newStock < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Negatif stok yapılamaz'
+      });
+    }
+
+    sizeItem.stock = newStock;
     await product.save();
+
+    // Size display formatı - Çocuk Giyim için "X Yaş" şeklinde göster
+    const sizeDisplay = product.category === 'Çocuk Giyim' ? `${size} Yaş` : size;
 
     const sale = new SalesHistory({
       productId: productId,
       productName: product.name,
+      category: product.category,
       size: size,
       quantity: parseInt(quantity),
       price: product.price,
@@ -57,7 +70,7 @@ router.post('/api/sales', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Satış başarılı. ${product.name} (${size}) x${quantity}`,
+      message: `Satış başarılı. ${product.name} (${sizeDisplay}) x${quantity}`,
       product,
       totalPrice: product.price * quantity
     });
@@ -132,8 +145,11 @@ router.delete('/api/sales-history/:id', async (req, res) => {
     // Satış kaydını sil
     await SalesHistory.findByIdAndDelete(req.params.id);
 
+    // Size display formatı
+    const sizeDisplay = sale.category === 'Çocuk Giyim' ? `${sale.size} Yaş` : sale.size;
+
     const msg = restoreStock 
-      ? `Satış silindi. ${sale.productName} (${sale.size}) x${sale.quantity} stoka geri eklendi`
+      ? `Satış silindi. ${sale.productName} (${sizeDisplay}) x${sale.quantity} stoka geri eklendi`
       : `Satış silindi. Stok değişmedi`;
 
     res.json({

@@ -137,6 +137,14 @@ router.delete('/api/products/:id', async (req, res) => {
   }
 });
 
+// Helper function to format size display
+const formatSizeDisplay = (size, category) => {
+  if (category === 'Çocuk Giyim') {
+    return `${size} Yaş`;
+  }
+  return size;
+};
+
 // PDF İndir - Tüm Ürünleri (HTML-PDF ile Türkçe Desteği)
 router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
   try {
@@ -153,7 +161,10 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
       totalStock += prodTotalStock;
       totalRevenue += prodRevenue;
 
-      const sizeDetails = p.sizeStock.map(s => `${s.size}(${s.stock})`).join(', ');
+      const sizeDetails = p.sizeStock.map(s => {
+        const formattedSize = formatSizeDisplay(s.size, p.category);
+        return `${formattedSize}(${s.stock})`;
+      }).join(', ');
       const bgColor = idx % 2 === 0 ? '#ffffff' : '#f3f4f6';
 
       return `
@@ -414,7 +425,7 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
       <head>
         <meta charset="UTF-8">
         <title>Toplu Etiketler</title>
-        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { 
@@ -563,7 +574,7 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
           window.onload = function() {
             setTimeout(() => window.print(), 500);
           };
-        </script>
+        <\/script>
       </body>
       </html>
     `;
@@ -605,7 +616,7 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
       <head>
         <meta charset="UTF-8">
         <title>${product.name} - Etiket</title>
-        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { 
@@ -736,16 +747,16 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
         <div class="labels-container" id="labels"></div>
         <script>
           const product = {
-            name: '${product.name.replace(/'/g, "\\'")}',
-            category: '${product.category.replace(/'/g, "\\'")}',
+            name: '${product.name.replace(/'/g, "\\'") }',
+            category: '${product.category.replace(/'/g, "\\'") }',
             price: ${product.price},
             finalPrice: ${finalPrice},
-            discountInfo: '${discountInfo.replace(/'/g, "\\'")}',
+            discountInfo: '${discountInfo.replace(/'/g, "\\'") }',
             barcode: '${product.barcode}',
             image: '${product.image}',
-            labelText: '${product.labelText ? product.labelText.replace(/'/g, "\\'") : ''}',
+            labelText: '${product.labelText ? product.labelText.replace(/'/g, "\\\'" ) : ''}',
             oldPrice: ${oldPrice || 'null'},
-            labelNote: '${labelNote.replace(/'/g, "\\'")}'
+            labelNote: '${labelNote.replace(/'/g, "\\'") }'
           };
 
           function createLabel(index) {
@@ -839,7 +850,7 @@ router.get('/api/products/:id/label-pdf', async (req, res) => {
           window.onload = function() {
             setTimeout(() => window.print(), 500);
           };
-        </script>
+        <\/script>
       </body>
       </html>
     `;
