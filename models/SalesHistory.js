@@ -20,6 +20,10 @@ const salesHistorySchema = new mongoose.Schema(
     cashier: {
       type: String,
       default: 'Sistem'
+    },
+    transactionId: {
+      type: String,
+      index: true
     }
   },
   {

@@ -6,7 +6,7 @@ const SalesHistory = require('../models/SalesHistory');
 // POS Satış Endpoint - Beden ve Miktar ile
 router.post('/api/satis', async (req, res) => {
   try {
-    const { barcode, quantity, size, paymentMethod } = req.body;
+    const { barcode, quantity, size, paymentMethod, transactionId } = req.body;
 
     // Barkod validasyonu
     if (!barcode || barcode.trim() === '') {
@@ -74,7 +74,8 @@ router.post('/api/satis', async (req, res) => {
       price: product.price,
       totalPrice,
       paymentMethod: paymentMethod || 'Nakit',
-      cashier: 'Sistem'
+      cashier: 'Sistem',
+      transactionId: transactionId || undefined
     });
 
     res.json({
@@ -98,7 +99,7 @@ router.post('/api/satis', async (req, res) => {
   }
 });
 
-// Satış Fişi
+// Satış Fişi - tek kayıt veya aynı transactionId'ye ait tüm kalemleri gösterir
 router.get('/api/satis/:id/receipt', async (req, res) => {
   try {
     const mongoose = require('mongoose');
@@ -110,28 +111,61 @@ router.get('/api/satis/:id/receipt', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Satış kaydı bulunamadı' });
     }
 
-    const date = new Date(sale.createdAt);
+    // Aynı işleme (transactionId) ait tüm kalemleri getir
+    let sales;
+    if (sale.transactionId) {
+      sales = await SalesHistory.find({ transactionId: sale.transactionId }).sort({ createdAt: 1 });
+    } else {
+      sales = [sale];
+    }
+
+    const date = new Date(sales[0].createdAt);
     const dateStr = date.toLocaleDateString('tr-TR');
     const timeStr = date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-    const isAge = sale.category === 'Çocuk Giyim';
-    const sizeDisplay = isAge && sale.size ? `${sale.size} Yaş` : (sale.size || '-');
+    const fisNo = sale.transactionId
+      ? sale.transactionId.replace('TXN-', '').slice(-10).toUpperCase()
+      : sale._id.toString().slice(-8).toUpperCase();
+
+    const itemRows = sales.map((s, i) => {
+      const isAge = s.category === 'Çocuk Giyim';
+      const sizeDisplay = isAge && s.size ? `${s.size} Yaş` : (s.size || '-');
+      return `
+        <div class="item-row">
+          <span class="item-num">${i + 1}.</span>
+          <span class="item-name">${s.productName || '-'} (${sizeDisplay})</span>
+          <span class="item-qty">x${s.quantity}</span>
+          <span class="item-total">${s.totalPrice ? s.totalPrice.toFixed(2) + ' TL' : '-'}</span>
+        </div>
+        <div class="item-detail">${s.price ? s.price.toFixed(2) + ' TL / adet' : ''}</div>
+      `;
+    }).join('');
+
+    const grandTotal = sales.reduce((sum, s) => sum + (s.totalPrice || 0), 0);
+    const paymentMethod = sales[0].paymentMethod || 'Nakit';
+    const cashier = sales[0].cashier || 'Sistem';
 
     const html = `
       <!DOCTYPE html>
       <html lang="tr">
       <head>
         <meta charset="UTF-8">
-        <title>Satış Fişi</title>
+        <title>Satış Fişi ${fisNo}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Courier New', monospace; font-size: 12px; background: #fff; padding: 10px; width: 80mm; }
           .center { text-align: center; }
           .bold { font-weight: bold; }
-          .divider { border-top: 1px dashed #333; margin: 8px 0; }
-          .row { display: flex; justify-content: space-between; margin: 3px 0; }
-          .title { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
-          .subtitle { font-size: 10px; color: #555; margin-bottom: 8px; }
-          .total-row { font-size: 14px; font-weight: bold; }
+          .divider { border-top: 1px dashed #333; margin: 6px 0; }
+          .row { display: flex; justify-content: space-between; margin: 2px 0; }
+          .title { font-size: 15px; font-weight: bold; margin-bottom: 3px; }
+          .subtitle { font-size: 10px; color: #555; margin-bottom: 6px; }
+          .item-row { display: flex; gap: 4px; margin: 3px 0 0; font-size: 11px; }
+          .item-num { min-width: 14px; }
+          .item-name { flex: 1; word-break: break-word; }
+          .item-qty { white-space: nowrap; }
+          .item-total { white-space: nowrap; text-align: right; min-width: 60px; }
+          .item-detail { font-size: 9px; color: #777; margin: 0 0 3px 18px; }
+          .total-row { font-size: 13px; font-weight: bold; }
           .footer { font-size: 10px; color: #555; margin-top: 8px; }
           @media print { body { padding: 0; } }
         </style>
@@ -143,21 +177,17 @@ router.get('/api/satis/:id/receipt', async (req, res) => {
         </div>
         <div class="divider"></div>
         <div class="row"><span>Tarih:</span><span>${dateStr} ${timeStr}</span></div>
-        <div class="row"><span>Fiş No:</span><span>${sale._id.toString().slice(-8).toUpperCase()}</span></div>
-        <div class="row"><span>Kasiyer:</span><span>${sale.cashier || 'Sistem'}</span></div>
+        <div class="row"><span>Fiş No:</span><span>${fisNo}</span></div>
+        <div class="row"><span>Kasiyer:</span><span>${cashier}</span></div>
         <div class="divider"></div>
-        <div class="bold" style="margin-bottom:4px;">ÜRÜN BİLGİLERİ</div>
-        <div class="row"><span>Ürün:</span><span>${sale.productName || '-'}</span></div>
-        <div class="row"><span>Kategori:</span><span>${sale.category || '-'}</span></div>
-        <div class="row"><span>Beden:</span><span>${sizeDisplay}</span></div>
-        <div class="row"><span>Birim Fiyat:</span><span>${sale.price ? sale.price.toFixed(2) + ' TL' : '-'}</span></div>
-        <div class="row"><span>Adet:</span><span>${sale.quantity}</span></div>
+        <div class="bold" style="margin-bottom:4px;">ÜRÜNLER</div>
+        ${itemRows}
         <div class="divider"></div>
-        <div class="row total-row"><span>TOPLAM:</span><span>${sale.totalPrice ? sale.totalPrice.toFixed(2) + ' TL' : '-'}</span></div>
-        <div class="row" style="margin-top:4px;"><span>Ödeme:</span><span>${sale.paymentMethod || 'Nakit'}</span></div>
+        <div class="row total-row"><span>TOPLAM:</span><span>${grandTotal.toFixed(2)} TL</span></div>
+        <div class="row" style="margin-top:3px;"><span>Ödeme:</span><span>${paymentMethod}</span></div>
         <div class="divider"></div>
         <div class="center footer">Bizi tercih ettiğiniz için teşekkürler!</div>
-        <script>window.onload = function() { window.print(); };</script>
+        <script>window.onload = function() { window.print(); };<\/script>
       </body>
       </html>
     `;

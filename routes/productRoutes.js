@@ -103,49 +103,69 @@ router.get('/api/products/report-pdf', async (req, res) => {
   }
 });
 
-// Toplu Etiket PDF - tüm ürünler için
+// Toplu Etiket PDF - seçili ürünler, sayfa başına 20 etiket (4×5 grid)
 router.get('/api/products/bulk-labels-pdf', async (req, res) => {
   try {
-    const products = await Product.find().sort({ category: 1, name: 1 });
+    const ids = req.query.ids ? req.query.ids.split(',').filter(Boolean) : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'En az bir ürün seçin' });
+    }
 
-    let allLabelDivs = '';
-    let barcodeScripts = '';
-    let labelIndex = 0;
+    const mongoose = require('mongoose');
+    const validIds = ids.filter(id => mongoose.Types.ObjectId.isValid(id));
+    const products = await Product.find({ _id: { $in: validIds } }).sort({ category: 1, name: 1 });
 
+    // Her ürün için beden başına bir etiket oluştur
+    const allLabels = [];
     for (const product of products) {
       const isAge = product.category === 'Çocuk Giyim';
       const safeName = product.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const safeBarcode = product.barcode.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-
       for (const s of product.sizeStock) {
-        const count = Math.max(s.stock, 1);
-        const sizeDisplay = isAge ? `${s.size} Yaş` : s.size;
-
-        for (let i = 0; i < count; i++) {
-          const slotId = `barcode-slot-${labelIndex}`;
-          const templateId = `barcode-tmpl-${labelIndex}`;
-          allLabelDivs += `
-            <div class="label">
-              <img src="${product.image}" alt="${safeName}" class="label-image" onerror="this.src='/images/default-product.svg'">
-              <div class="label-info">
-                <div class="label-name">${safeName}</div>
-                <div class="label-category">${product.category}</div>
-                ${sizeDisplay ? `<div class="label-size">${sizeDisplay}</div>` : ''}
-                <div class="label-price">${product.price.toFixed(2)} ₺</div>
-                <svg id="${slotId}" style="width:100%;height:40px;"></svg>
-                <div class="label-barcode-text">${product.barcode}</div>
-              </div>
-            </div>
-          `;
-          barcodeScripts += `
-            JsBarcode(document.getElementById('${slotId}'), '${safeBarcode}', {
-              format: 'CODE128', width: 1.5, height: 38, displayValue: false
-            });
-          `;
-          labelIndex++;
-        }
+        allLabels.push({
+          name: safeName,
+          category: product.category,
+          sizeDisplay: isAge ? `${s.size} Yaş` : s.size,
+          price: product.price,
+          barcode: product.barcode
+        });
       }
     }
+
+    if (allLabels.length === 0) {
+      return res.status(404).json({ success: false, message: 'Seçili ürünler bulunamadı' });
+    }
+
+    // Barcodeları JS tarafında render etmek için her etikete benzersiz id
+    let barcodeScript = '';
+    const LABELS_PER_PAGE = 20;
+    const pages = [];
+    for (let i = 0; i < allLabels.length; i += LABELS_PER_PAGE) {
+      pages.push(allLabels.slice(i, i + LABELS_PER_PAGE));
+    }
+
+    let labelIndex = 0;
+    const pageHtml = pages.map((pageLbls, pi) => {
+      const labelDivs = pageLbls.map((lbl) => {
+        const bcId = `bc-${labelIndex}`;
+        const safeBarcode = lbl.barcode.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+        barcodeScript += `
+          try { JsBarcode(document.getElementById('${bcId}'), '${safeBarcode}', { format:'CODE128', width:1, height:18, displayValue:false }); } catch(e) {}
+        `;
+        labelIndex++;
+        return `
+          <div class="label">
+            <div class="label-name">${lbl.name}</div>
+            <div class="label-category">${lbl.category}</div>
+            ${lbl.sizeDisplay ? `<div class="label-size">${lbl.sizeDisplay}</div>` : ''}
+            <div class="label-price">${lbl.price.toFixed(2)} ₺</div>
+            <svg id="${bcId}" style="width:100%;height:20px;display:block;"></svg>
+            <div class="label-barcode-text">${lbl.barcode}</div>
+          </div>
+        `;
+      }).join('');
+      const isLast = pi === pages.length - 1;
+      return `<div class="label-page${isLast ? ' last-page' : ''}">${labelDivs}</div>`;
+    }).join('');
 
     const html = `
       <!DOCTYPE html>
@@ -154,76 +174,65 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
         <meta charset="UTF-8">
         <title>Toplu Ürün Etiketleri</title>
         <style>
+          @page { size: A4 portrait; margin: 10mm; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-          .label {
-            width: 80mm;
-            background: white;
-            padding: 8mm;
-            margin: 0 auto 10px;
-            border: 1px solid #ddd;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          body { font-family: Arial, sans-serif; background: white; }
+          .label-page {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            gap: 2mm;
+            width: 190mm;
+            height: 277mm;
             page-break-after: always;
+          }
+          .label-page.last-page { page-break-after: auto; }
+          .label {
+            border: 1px solid #bbb;
+            padding: 1.5mm 2mm;
             display: flex;
             flex-direction: column;
-            gap: 6px;
-          }
-          .label-image {
-            width: 100%;
-            height: 40mm;
-            object-fit: cover;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-          }
-          .label-info {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
+            justify-content: space-around;
+            overflow: hidden;
           }
           .label-name {
-            font-size: 13px;
+            font-size: 8px;
             font-weight: bold;
-            color: #333;
+            color: #222;
             line-height: 1.2;
+            max-height: 2.5em;
+            overflow: hidden;
           }
-          .label-category {
-            font-size: 10px;
-            color: #666;
-          }
+          .label-category { font-size: 7px; color: #555; }
           .label-size {
-            font-size: 17px;
+            font-size: 9px;
             font-weight: bold;
             color: #fff;
             background: #2563eb;
-            padding: 3px 10px;
-            border-radius: 4px;
+            padding: 1px 4px;
+            border-radius: 3px;
             display: inline-block;
             align-self: flex-start;
           }
-          .label-price {
-            font-size: 15px;
-            font-weight: bold;
-            color: #2563eb;
-          }
+          .label-price { font-size: 10px; font-weight: bold; color: #2563eb; }
           .label-barcode-text {
-            font-size: 9px;
+            font-size: 6px;
             text-align: center;
             font-family: 'Courier New', monospace;
-            color: #333;
+            width: 100%;
           }
           @media print {
-            body { background: white; padding: 0; }
-            .label { margin: 0; box-shadow: none; border: none; }
+            body { background: white; }
+            .label { border: 0.5pt solid #bbb; }
           }
         </style>
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
       </head>
       <body>
-        ${allLabelDivs}
+        ${pageHtml}
         <script>
           window.onload = function() {
-            ${barcodeScripts}
+            ${barcodeScript}
             window.print();
           };
         </script>

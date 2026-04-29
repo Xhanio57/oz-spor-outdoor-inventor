@@ -16,7 +16,7 @@
             <option value="Çocuk Giyim">Çocuk Giyim</option>
             <option value="Diğer">Diğer</option>
           </select>
-          <a href="/api/products/bulk-labels-pdf" target="_blank" class="btn btn-small" style="background:#8b5cf6;color:white;text-decoration:none;">🏷️ Toplu Etiket</a>
+          <button class="btn btn-small" style="background:#8b5cf6;color:white;" onclick="openBulkLabelModal()">🏷️ Toplu Etiket</button>
           <a href="/api/products/report-pdf" target="_blank" class="btn btn-secondary btn-small">🖨️ PDF Rapor</a>
         </div>
       </div>
@@ -76,6 +76,33 @@
           </button>
         </div>
         <button class="btn btn-secondary" onclick="closeStockModal()" style="width:100%;margin-top:0.75rem;">Kapat</button>
+      </div>
+    </div>
+
+    <!-- Toplu Etiket Seçim Modal -->
+    <div id="bulkLabelModal" class="modal hidden">
+      <div class="modal-content" style="max-width:620px;text-align:left;">
+        <button class="close" onclick="closeBulkLabelModal()">&times;</button>
+        <h3 style="margin-bottom:0.5rem;color:var(--primary-color);">🏷️ Toplu Etiket Seçimi</h3>
+        <p style="font-size:0.85rem;color:#6b7280;margin-bottom:0.75rem;">Etiket basılacak ürünleri seçin. Her A4 sayfasına 20 etiket sığar (4×5 düzen). Her ürün için tüm bedenler ayrı etiket olarak oluşturulur.</p>
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap;">
+          <button type="button" onclick="toggleAllBulkLabels(true)"
+            style="padding:0.25rem 0.7rem;font-size:0.78rem;border:1px solid #d1d5db;background:#f9fafb;border-radius:4px;cursor:pointer;">
+            Tümünü Seç
+          </button>
+          <button type="button" onclick="toggleAllBulkLabels(false)"
+            style="padding:0.25rem 0.7rem;font-size:0.78rem;border:1px solid #d1d5db;background:#f9fafb;border-radius:4px;cursor:pointer;">
+            Temizle
+          </button>
+          <span id="bulkLabelCount" style="font-size:0.82rem;color:#6b7280;margin-left:0.25rem;"></span>
+        </div>
+        <div id="bulkLabelProductList"
+          style="max-height:340px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px;padding:0.5rem;margin-bottom:1rem;display:grid;grid-template-columns:1fr 1fr;gap:0.35rem;">
+        </div>
+        <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
+          <button class="btn btn-secondary" onclick="closeBulkLabelModal()">İptal</button>
+          <button class="btn btn-primary" id="bulkLabelPrintBtn" onclick="printBulkLabels()">🖨️ Etiket Oluştur</button>
+        </div>
       </div>
     </div>
 
@@ -292,6 +319,70 @@
       document.getElementById('bulkQtyInput').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') applyBulkStock();
       });
+
+      // ---- Toplu Etiket Modal ----
+      function openBulkLabelModal() {
+        const list = document.getElementById('bulkLabelProductList');
+        list.innerHTML = allProducts.map(p => {
+          const sizeCount = p.sizeStock ? p.sizeStock.length : 0;
+          return \`
+            <label style="display:flex;align-items:flex-start;gap:0.4rem;padding:0.4rem 0.5rem;background:#f9fafb;border-radius:5px;cursor:pointer;border:2px solid transparent;transition:border-color 0.15s;"
+              id="blbl_\${p._id}">
+              <input type="checkbox" class="bulk-label-cb" value="\${p._id}"
+                style="margin-top:2px;cursor:pointer;"
+                onchange="updateBulkLabelHighlight('\${p._id}')">
+              <span style="flex:1;font-size:0.83rem;">
+                <strong>\${p.name}</strong>
+                <br><span style="color:#6b7280;font-size:0.75rem;">\${p.category} · \${sizeCount} beden</span>
+              </span>
+            </label>
+          \`;
+        }).join('');
+        updateBulkLabelCount();
+        document.getElementById('bulkLabelModal').classList.remove('hidden');
+      }
+
+      function closeBulkLabelModal() {
+        document.getElementById('bulkLabelModal').classList.add('hidden');
+      }
+
+      function updateBulkLabelHighlight(id) {
+        const lbl = document.getElementById('blbl_' + id);
+        if (!lbl) return;
+        const cb = lbl.querySelector('input[type=checkbox]');
+        lbl.style.borderColor = cb && cb.checked ? 'var(--primary-color)' : 'transparent';
+        updateBulkLabelCount();
+      }
+
+      function toggleAllBulkLabels(check) {
+        document.querySelectorAll('.bulk-label-cb').forEach(cb => {
+          cb.checked = check;
+          const lbl = cb.closest('label');
+          if (lbl) lbl.style.borderColor = check ? 'var(--primary-color)' : 'transparent';
+        });
+        updateBulkLabelCount();
+      }
+
+      function updateBulkLabelCount() {
+        const selected = document.querySelectorAll('.bulk-label-cb:checked').length;
+        document.getElementById('bulkLabelCount').textContent = selected > 0 ? selected + ' ürün seçildi' : '';
+      }
+
+      function printBulkLabels() {
+        const selected = Array.from(document.querySelectorAll('.bulk-label-cb:checked')).map(cb => cb.value);
+        if (selected.length === 0) {
+          showNotification('En az bir ürün seçin', 'error');
+          return;
+        }
+        const url = '/api/products/bulk-labels-pdf?ids=' + selected.join(',');
+        window.open(url, '_blank');
+        closeBulkLabelModal();
+      }
+
+      document.getElementById('bulkLabelModal').addEventListener('click', function(e) {
+        if (e.target === this) closeBulkLabelModal();
+      });
+      // ---- /Toplu Etiket Modal ----
 
       loadProducts();
     </script>
