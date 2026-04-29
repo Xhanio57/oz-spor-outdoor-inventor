@@ -199,6 +199,33 @@ router.get('/api/satis/:id/receipt', async (req, res) => {
   }
 });
 
+// Satış Kaydı Sil (transactionId varsa tüm sipariş silinir)
+router.delete('/api/satis/:id', async (req, res) => {
+  try {
+    const mongoose = require('mongoose');
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Geçersiz satış ID' });
+    }
+    const sale = await SalesHistory.findById(req.params.id);
+    if (!sale) {
+      return res.status(404).json({ success: false, message: 'Satış kaydı bulunamadı' });
+    }
+
+    let deletedCount = 0;
+    if (sale.transactionId) {
+      const result = await SalesHistory.deleteMany({ transactionId: sale.transactionId });
+      deletedCount = result.deletedCount;
+    } else {
+      await SalesHistory.findByIdAndDelete(req.params.id);
+      deletedCount = 1;
+    }
+
+    res.json({ success: true, message: `${deletedCount} satış kaydı silindi` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Silme hatası: ' + error.message });
+  }
+});
+
 // Satış Geçmişi
 router.get('/api/satis/history', async (req, res) => {
   try {

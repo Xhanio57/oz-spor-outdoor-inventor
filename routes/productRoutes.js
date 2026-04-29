@@ -63,11 +63,11 @@ function buildLabelsHtml(labels, title) {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: Arial, Helvetica, sans-serif; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-    /* A4 printable area with 8mm margins: ~194mm × 281mm */
+    /* A4 printable area with 8mm margins: ~194mm × 281mm → 5 cols × 4 rows = 20 labels */
     .label-page {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      grid-template-rows: repeat(5, 1fr);
+      grid-template-columns: repeat(5, 1fr);
+      grid-template-rows: repeat(4, 1fr);
       gap: 1.5mm;
       width: 194mm;
       height: 281mm;
@@ -75,7 +75,7 @@ function buildLabelsHtml(labels, title) {
     }
     .label-page.last { page-break-after: auto; }
 
-    /* Each label: ~47mm × 54mm */
+    /* Each label: ~37mm wide × 69mm tall */
     .label {
       border: 0.5pt solid #c8c8c8;
       padding: 1.5mm 1.5mm 1mm;
@@ -96,12 +96,12 @@ function buildLabelsHtml(labels, title) {
       flex-shrink: 0;
     }
     .lbl-logo {
-      height: 6.5mm;
-      max-width: 20mm;
+      height: 5.5mm;
+      max-width: 16mm;
       object-fit: contain;
     }
     .lbl-price {
-      font-size: 9.5pt;
+      font-size: 11pt;
       font-weight: 800;
       color: #1d4ed8;
       white-space: nowrap;
@@ -110,7 +110,7 @@ function buildLabelsHtml(labels, title) {
 
     /* Product name — 2 lines max */
     .lbl-name {
-      font-size: 7pt;
+      font-size: 8pt;
       font-weight: 700;
       color: #111;
       line-height: 1.25;
@@ -141,11 +141,11 @@ function buildLabelsHtml(labels, title) {
       justify-content: center;
     }
     .lbl-size {
-      font-size: 10.5pt;
+      font-size: 14pt;
       font-weight: 800;
       color: #fff;
       background: #2563eb;
-      padding: 1.5pt 8pt;
+      padding: 2pt 8pt;
       border-radius: 3pt;
       letter-spacing: 0.5pt;
       display: inline-block;

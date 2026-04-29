@@ -36,10 +36,11 @@
               <th style="text-align:right;">Toplam</th>
               <th>Ödeme</th>
               <th>Fiş</th>
+              <th>Sil</th>
             </tr>
           </thead>
           <tbody id="historyBody">
-            <tr><td colspan="10" class="text-center">Yükleniyor...</td></tr>
+            <tr><td colspan="11" class="text-center">Yükleniyor...</td></tr>
           </tbody>
         </table>
       </div>
@@ -56,7 +57,7 @@
           renderTable(allHistory);
         } catch (err) {
           document.getElementById('historyBody').innerHTML =
-            '<tr><td colspan="10" class="text-center">Satış geçmişi yüklenemedi</td></tr>';
+            '<tr><td colspan="11" class="text-center">Satış geçmişi yüklenemedi</td></tr>';
         }
       }
 
@@ -80,16 +81,17 @@
       function renderTable(data) {
         const tbody = document.getElementById('historyBody');
         if (data.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="10" class="text-center">Satış kaydı bulunamadı</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="11" class="text-center">Satış kaydı bulunamadı</td></tr>';
           return;
         }
 
-        tbody.innerHTML = data.map((r, idx) => {
+          tbody.innerHTML = data.map((r, idx) => {
           const date = new Date(r.createdAt);
           const dateStr = date.toLocaleDateString('tr-TR');
           const timeStr = date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
           const isAge = r.category === 'Çocuk Giyim';
           const sizeDisplay = isAge && r.size ? r.size + ' Yaş' : (r.size || '-');
+          const deleteLabel = r.transactionId ? '🗑️ Siparişi Sil' : '🗑️ Sil';
 
           return \`
             <tr>
@@ -108,6 +110,7 @@
               <td style="text-align:right;font-weight:600;color:#10b981;">\${r.totalPrice ? r.totalPrice.toFixed(2) + ' ₺' : '-'}</td>
               <td>\${r.paymentMethod || '-'}</td>
               <td><a href="/api/satis/\${r._id}/receipt" target="_blank" class="btn btn-small" style="background:#f59e0b;color:white;text-decoration:none;white-space:nowrap;">🧾 Fiş</a></td>
+              <td><button onclick="deleteSale('\${r._id}', \${!!r.transactionId})" class="btn btn-small" style="background:#ef4444;color:white;border:none;cursor:pointer;white-space:nowrap;">\${deleteLabel}</button></td>
             </tr>
           \`;
         }).join('');
@@ -136,6 +139,25 @@
         n.className = 'notification ' + type;
         n.classList.remove('hidden');
         setTimeout(() => n.classList.add('hidden'), 5000);
+      }
+
+      async function deleteSale(id, hasTransaction) {
+        const msg = hasTransaction
+          ? 'Bu siparişe ait tüm ürünler silinecek. Emin misiniz?'
+          : 'Bu satış kaydı silinecek. Emin misiniz?';
+        if (!confirm(msg)) return;
+        try {
+          const res = await fetch('/api/satis/' + id, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            showNotification(data.message, 'success');
+            await loadHistory();
+          } else {
+            showNotification(data.message || 'Silme başarısız', 'error');
+          }
+        } catch (err) {
+          showNotification('Silme hatası: ' + err.message, 'error');
+        }
       }
 
       loadHistory();
