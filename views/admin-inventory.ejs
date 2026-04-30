@@ -79,6 +79,58 @@
       </div>
     </div>
 
+    <!-- Ürün Düzenleme Modal -->
+    <div id="editModal" class="modal hidden">
+      <div class="modal-content" style="max-width:500px;text-align:left;">
+        <button class="close" onclick="closeEditModal()">&times;</button>
+        <h3 style="margin-bottom:1rem;color:var(--primary-color);">✏️ Ürün Düzenle</h3>
+
+        <div style="margin-bottom:0.75rem;">
+          <label style="font-weight:600;font-size:0.875rem;display:block;margin-bottom:0.3rem;">Ürün Adı</label>
+          <input type="text" id="editName" maxlength="100"
+            style="width:100%;padding:0.5rem 0.7rem;border:1px solid #d1d5db;border-radius:6px;font-size:0.95rem;">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label style="font-weight:600;font-size:0.875rem;display:block;margin-bottom:0.3rem;">Fiyat (₺)</label>
+            <input type="number" id="editPrice" min="0" step="0.01"
+              style="width:100%;padding:0.5rem 0.7rem;border:1px solid #d1d5db;border-radius:6px;font-size:0.95rem;">
+          </div>
+          <div>
+            <label style="font-weight:600;font-size:0.875rem;display:block;margin-bottom:0.3rem;">Kategori</label>
+            <select id="editCategory"
+              style="width:100%;padding:0.5rem 0.7rem;border:1px solid #d1d5db;border-radius:6px;font-size:0.9rem;">
+              <option value="Spor Giyim">Spor Giyim</option>
+              <option value="Judogi">Judogi</option>
+              <option value="Kamp Malzemeleri">Kamp Malzemeleri</option>
+              <option value="Ayakkabı">Ayakkabı</option>
+              <option value="Aksesuarlar">Aksesuarlar</option>
+              <option value="Çocuk Giyim">Çocuk Giyim</option>
+              <option value="Diğer">Diğer</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:0.75rem;">
+          <label style="font-weight:600;font-size:0.875rem;display:block;margin-bottom:0.3rem;">Açıklama</label>
+          <textarea id="editDescription" rows="3"
+            style="width:100%;padding:0.5rem 0.7rem;border:1px solid #d1d5db;border-radius:6px;font-size:0.9rem;resize:vertical;"></textarea>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+          <label style="font-weight:600;font-size:0.875rem;display:block;margin-bottom:0.3rem;">Barkod</label>
+          <input type="text" id="editBarcode" readonly
+            style="width:100%;padding:0.5rem 0.7rem;border:1px solid #e5e7eb;border-radius:6px;font-size:0.9rem;background:#f9fafb;color:#6b7280;font-family:monospace;">
+        </div>
+
+        <div style="display:flex;gap:0.75rem;">
+          <button class="btn btn-primary" id="saveEditBtn" onclick="saveEdit()" style="flex:1;">💾 Kaydet</button>
+          <button class="btn btn-secondary" onclick="closeEditModal()" style="flex:1;">İptal</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Toplu Etiket Seçim Modal -->
     <div id="bulkLabelModal" class="modal hidden">
       <div class="modal-content" style="max-width:620px;text-align:left;">
@@ -167,6 +219,7 @@
               <td style="max-width:260px;">\${sizeBadges}</td>
               <td>
                 <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+                  <button class="btn btn-small" style="background:#f59e0b;color:white;" onclick="openEditModal('\${p._id}')">✏️ Düzenle</button>
                   <button class="btn btn-info btn-small" onclick="openStockModal('\${p._id}')">📦 Stok</button>
                   <a href="/api/products/\${p._id}/label-pdf" target="_blank" class="btn btn-small" style="background:#8b5cf6;color:white;text-decoration:none;">🏷️ Etiket</a>
                   <button class="btn btn-danger btn-small" onclick="deleteProduct('\${p._id}', '\${p.name.replace(/'/g, String.fromCharCode(39))}')">🗑️</button>
@@ -383,6 +436,68 @@
         if (e.target === this) closeBulkLabelModal();
       });
       // ---- /Toplu Etiket Modal ----
+
+      // ---- Ürün Düzenleme Modal ----
+      let currentEditProductId = null;
+
+      function openEditModal(productId) {
+        const product = allProducts.find(p => p._id === productId);
+        if (!product) return;
+        currentEditProductId = productId;
+        document.getElementById('editName').value = product.name || '';
+        document.getElementById('editPrice').value = product.price || '';
+        document.getElementById('editCategory').value = product.category || 'Diğer';
+        document.getElementById('editDescription').value = product.description || '';
+        document.getElementById('editBarcode').value = product.barcode || '';
+        document.getElementById('editModal').classList.remove('hidden');
+        document.getElementById('editName').focus();
+      }
+
+      function closeEditModal() {
+        document.getElementById('editModal').classList.add('hidden');
+        currentEditProductId = null;
+      }
+
+      async function saveEdit() {
+        if (!currentEditProductId) return;
+        const name = document.getElementById('editName').value.trim();
+        const price = parseFloat(document.getElementById('editPrice').value);
+        const category = document.getElementById('editCategory').value;
+        const description = document.getElementById('editDescription').value.trim();
+
+        if (!name) { showNotification('Ürün adı boş olamaz', 'error'); return; }
+        if (isNaN(price) || price < 0) { showNotification('Geçerli bir fiyat girin', 'error'); return; }
+
+        const btn = document.getElementById('saveEditBtn');
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        try {
+          const res = await fetch('/api/products/' + currentEditProductId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, price, category, description })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showNotification(data.message, 'success');
+            await loadProducts();
+            closeEditModal();
+          } else {
+            showNotification(data.message || 'Güncelleme başarısız', 'error');
+          }
+        } catch (err) {
+          showNotification('Hata: ' + err.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '💾 Kaydet';
+        }
+      }
+
+      document.getElementById('editModal').addEventListener('click', function(e) {
+        if (e.target === this) closeEditModal();
+      });
+      // ---- /Ürün Düzenleme Modal ----
 
       loadProducts();
     </script>
