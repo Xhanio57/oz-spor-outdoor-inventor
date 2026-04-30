@@ -1,0 +1,166 @@
+<%- include('layout', { 
+  title: 'Satış Geçmişi',
+  body: `
+    <div class="admin-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;">
+        <h2 style="margin:0;">📜 Satış Geçmişi</h2>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+          <input type="text" id="searchInput" placeholder="🔍 Ürün veya kategori ara..." style="width:220px;padding:0.6rem 0.9rem;">
+          <select id="categoryFilter" style="padding:0.6rem 0.9rem;width:160px;">
+            <option value="">Tüm Kategoriler</option>
+            <option value="Spor Giyim">Spor Giyim</option>
+            <option value="Judogi">Judogi</option>
+            <option value="Kamp Malzemeleri">Kamp Malzemeleri</option>
+            <option value="Ayakkabı">Ayakkabı</option>
+            <option value="Aksesuarlar">Aksesuarlar</option>
+            <option value="Çocuk Giyim">Çocuk Giyim</option>
+            <option value="Diğer">Diğer</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="notification" class="notification hidden"></div>
+      <div id="statsBar" style="display:flex;gap:1.5rem;margin-bottom:1.5rem;flex-wrap:wrap;"></div>
+
+      <div class="table-wrapper">
+        <table class="inventory-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Tarih / Saat</th>
+              <th>Ürün</th>
+              <th>Kategori</th>
+              <th>Beden / Yaş</th>
+              <th style="text-align:center;">Adet</th>
+              <th style="text-align:right;">Birim Fiyat</th>
+              <th style="text-align:right;">Toplam</th>
+              <th>Ödeme</th>
+              <th>Fiş</th>
+              <th>Sil</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="11" class="text-center">Yükleniyor...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      let allHistory = [];
+
+      async function loadHistory() {
+        try {
+          const res = await fetch('/api/satis/history');
+          allHistory = await res.json();
+          renderStats(allHistory);
+          renderTable(allHistory);
+        } catch (err) {
+          document.getElementById('historyBody').innerHTML =
+            '<tr><td colspan="11" class="text-center">Satış geçmişi yüklenemedi</td></tr>';
+        }
+      }
+
+      function renderStats(data) {
+        const totalSales = data.length;
+        const totalRevenue = data.reduce((s, r) => s + (r.totalPrice || 0), 0);
+        const totalItems = data.reduce((s, r) => s + (r.quantity || 0), 0);
+        const bar = document.getElementById('statsBar');
+        bar.innerHTML = [
+          { label: 'Toplam Satış', value: totalSales, color: '#2563eb' },
+          { label: 'Toplam Gelir', value: totalRevenue.toFixed(2) + ' ₺', color: '#10b981' },
+          { label: 'Satılan Ürün', value: totalItems, color: '#f59e0b' }
+        ].map(s => \`
+          <div style="background:white;padding:0.75rem 1.25rem;border-radius:8px;border-left:4px solid \${s.color};box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+            <div style="font-size:1.3rem;font-weight:bold;color:\${s.color};">\${s.value}</div>
+            <div style="font-size:0.8rem;color:#6b7280;">\${s.label}</div>
+          </div>
+        \`).join('');
+      }
+
+      function renderTable(data) {
+        const tbody = document.getElementById('historyBody');
+        if (data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="11" class="text-center">Satış kaydı bulunamadı</td></tr>';
+          return;
+        }
+
+          tbody.innerHTML = data.map((r, idx) => {
+          const date = new Date(r.createdAt);
+          const dateStr = date.toLocaleDateString('tr-TR');
+          const timeStr = date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+          const isAge = r.category === 'Çocuk Giyim';
+          const sizeDisplay = isAge && r.size ? r.size + ' Yaş' : (r.size || '-');
+          const deleteLabel = r.transactionId ? '🗑️ Siparişi Sil' : '🗑️ Sil';
+
+          return \`
+            <tr>
+              <td style="text-align:center;">\${idx + 1}</td>
+              <td style="white-space:nowrap;">\${dateStr}<br><small style="color:#6b7280;">\${timeStr}</small></td>
+              <td><strong>\${r.productName || '-'}</strong></td>
+              <td>\${r.category || '-'}</td>
+              <td>
+                \${isAge
+                  ? \`<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-weight:600;font-size:0.85rem;">👶 \${sizeDisplay}</span>\`
+                  : \`<span style="background:#f3f4f6;color:#374151;padding:2px 8px;border-radius:4px;font-size:0.85rem;">\${sizeDisplay}</span>\`
+                }
+              </td>
+              <td style="text-align:center;">\${r.quantity}</td>
+              <td style="text-align:right;">\${r.price ? r.price.toFixed(2) + ' ₺' : '-'}</td>
+              <td style="text-align:right;font-weight:600;color:#10b981;">\${r.totalPrice ? r.totalPrice.toFixed(2) + ' ₺' : '-'}</td>
+              <td>\${r.paymentMethod || '-'}</td>
+              <td><a href="/api/satis/\${r._id}/receipt" target="_blank" class="btn btn-small" style="background:#f59e0b;color:white;text-decoration:none;white-space:nowrap;">🧾 Fiş</a></td>
+              <td><button onclick="deleteSale('\${r._id}', \${!!r.transactionId})" class="btn btn-small" style="background:#ef4444;color:white;border:none;cursor:pointer;white-space:nowrap;">\${deleteLabel}</button></td>
+            </tr>
+          \`;
+        }).join('');
+      }
+
+      function applyFilters() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const cat = document.getElementById('categoryFilter').value;
+        const filtered = allHistory.filter(r => {
+          const matchSearch = !search ||
+            (r.productName && r.productName.toLowerCase().includes(search)) ||
+            (r.category && r.category.toLowerCase().includes(search));
+          const matchCat = !cat || r.category === cat;
+          return matchSearch && matchCat;
+        });
+        renderTable(filtered);
+        renderStats(filtered);
+      }
+
+      document.getElementById('searchInput').addEventListener('input', applyFilters);
+      document.getElementById('categoryFilter').addEventListener('change', applyFilters);
+
+      function showNotification(message, type) {
+        const n = document.getElementById('notification');
+        n.textContent = message;
+        n.className = 'notification ' + type;
+        n.classList.remove('hidden');
+        setTimeout(() => n.classList.add('hidden'), 5000);
+      }
+
+      async function deleteSale(id, hasTransaction) {
+        const msg = hasTransaction
+          ? 'Bu siparişe ait tüm ürünler silinecek. Emin misiniz?'
+          : 'Bu satış kaydı silinecek. Emin misiniz?';
+        if (!confirm(msg)) return;
+        try {
+          const res = await fetch('/api/satis/' + id, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            showNotification(data.message, 'success');
+            await loadHistory();
+          } else {
+            showNotification(data.message || 'Silme başarısız', 'error');
+          }
+        } catch (err) {
+          showNotification('Silme hatası: ' + err.message, 'error');
+        }
+      }
+
+      loadHistory();
+    </script>
+  `
+}) %>
