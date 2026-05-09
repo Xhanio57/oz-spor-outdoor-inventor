@@ -5,6 +5,12 @@ const PDFDocument = require('pdfkit');
 const htmlPdf = require('html-pdf');
 const path = require('path');
 
+const formatLabelSize = (category, size) => {
+  if (!size) return '';
+  if (category === 'Çocuk Giyim') return `${size} Yaş`;
+  return size;
+};
+
 router.get('/api/products', async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
@@ -327,14 +333,34 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
         discountInfo = `${product.price.toFixed(2)} TL → ${finalPrice.toFixed(2)} TL (-${product.discountValue.toFixed(2)} TL)`;
       }
 
-      // Stok sayısı kadar etiket oluştur
-      const totalStock = product.sizeStock.reduce((a, b) => a + b.stock, 0);
-      const labelCount = useStock ? totalStock : 1;
+      if (useStock) {
+        const sizeStocks = Array.isArray(product.sizeStock) ? product.sizeStock : [];
+        sizeStocks.forEach(sizeItem => {
+          const stockQty = Number(sizeItem.stock) || 0;
+          if (stockQty <= 0) return;
+          const formattedSize = formatLabelSize(product.category, sizeItem.size);
 
-      for (let i = 0; i < labelCount; i++) {
+          for (let i = 0; i < stockQty; i++) {
+            labels.push({
+              name: product.name,
+              category: product.category,
+              size: formattedSize,
+              price: product.price,
+              finalPrice: finalPrice,
+              discountInfo: discountInfo,
+              barcode: product.barcode,
+              image: product.image,
+              labelText: product.labelText || '',
+              oldPrice: parsedOldPrice,
+              labelNote: labelNote || ''
+            });
+          }
+        });
+      } else {
         labels.push({
           name: product.name,
           category: product.category,
+          size: '',
           price: product.price,
           finalPrice: finalPrice,
           discountInfo: discountInfo,
@@ -392,11 +418,17 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
         noteHtml = '<div class="label-note"></div>';
       }
 
+      let sizeHtml = '';
+      if (label.size) {
+        sizeHtml = `<div class="label-size">Beden: ${label.size}</div>`;
+      }
+
       labelHtml += `
         <div class="label">
           <img src="${label.image}" alt="${label.name}" class="label-image" onerror="this.src='/images/default-product.svg'">
           <div class="label-name">${label.name}</div>
           <div class="label-category">${label.category}</div>
+          ${sizeHtml}
           ${priceHtml}
           <div class="label-barcode-img">
             <svg id="barcode-${idx}"></svg>
@@ -463,6 +495,11 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
           .label-category {
             font-size: 7px;
             color: #666;
+          }
+          .label-size {
+            font-size: 7px;
+            color: #111;
+            font-weight: bold;
           }
           .price-section {
             border-top: 0.5px solid #ddd;
