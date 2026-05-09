@@ -32,7 +32,7 @@
 
     <script>
       const categoryLabels = {
-        'Çocuk Giyim': (size) => size + ' Yaş',
+        'Çocuk Giyim': (size) => `${size} Yaş`,
         'default': (size) => size
       };
 
@@ -48,20 +48,20 @@
             const totalPrice = (sale.price * sale.quantity).toFixed(2);
             const date = new Date(sale.createdAt).toLocaleString('tr-TR');
             
-            html += '<tr>' +
-              '<td>' + (idx + 1) + '</td>' +
-              '<td>' + sale.productName + '</td>' +
-              '<td>' + (sale.category || 'N/A') + '</td>' +
-              '<td>' + sizeDisplay + '</td>' +
-              '<td>' + sale.quantity + '</td>' +
-              '<td>' + sale.price.toFixed(2) + ' TL</td>' +
-              '<td>' + totalPrice + ' TL</td>' +
-              '<td>' + sale.paymentMethod + '</td>' +
-              '<td>' + date + '</td>' +
-              '<td>' +
-                '<button onclick="deleteSale(\'' + sale._id + '\')" class="btn btn-small btn-danger">Geri Al</button>' +
-              '</td>' +
-            '</tr>';
+            html += `<tr>
+              <td>${idx + 1}</td>
+              <td>${sale.productName}</td>
+              <td>${sale.category || 'N/A'}</td>
+              <td>${sizeDisplay}</td>
+              <td>${sale.quantity}</td>
+              <td>${sale.price.toFixed(2)} TL</td>
+              <td>${totalPrice} TL</td>
+              <td>${sale.paymentMethod}</td>
+              <td>${date}</td>
+              <td>
+                <button onclick="deleteSale('${sale._id}')" class="btn btn-small btn-danger">Geri Al</button>
+              </td>
+            </tr>`;
           });
           
           document.getElementById('salesBody').innerHTML = html;
@@ -80,7 +80,7 @@
         }
         
         try {
-          const response = await fetch('/api/sales-history/date/' + start + '/' + end);
+          const response = await fetch(`/api/sales-history/date/${start}/${end}`);
           const sales = await response.json();
           
           let html = '';
@@ -90,20 +90,20 @@
             const totalPrice = (sale.price * sale.quantity).toFixed(2);
             const date = new Date(sale.createdAt).toLocaleString('tr-TR');
             
-            html += '<tr>' +
-              '<td>' + (idx + 1) + '</td>' +
-              '<td>' + sale.productName + '</td>' +
-              '<td>' + (sale.category || 'N/A') + '</td>' +
-              '<td>' + sizeDisplay + '</td>' +
-              '<td>' + sale.quantity + '</td>' +
-              '<td>' + sale.price.toFixed(2) + ' TL</td>' +
-              '<td>' + totalPrice + ' TL</td>' +
-              '<td>' + sale.paymentMethod + '</td>' +
-              '<td>' + date + '</td>' +
-              '<td>' +
-                '<button onclick="deleteSale(\'' + sale._id + '\')" class="btn btn-small btn-danger">Geri Al</button>' +
-              '</td>' +
-            '</tr>';
+            html += `<tr>
+              <td>${idx + 1}</td>
+              <td>${sale.productName}</td>
+              <td>${sale.category || 'N/A'}</td>
+              <td>${sizeDisplay}</td>
+              <td>${sale.quantity}</td>
+              <td>${sale.price.toFixed(2)} TL</td>
+              <td>${totalPrice} TL</td>
+              <td>${sale.paymentMethod}</td>
+              <td>${date}</td>
+              <td>
+                <button onclick="deleteSale('${sale._id}')" class="btn btn-small btn-danger">Geri Al</button>
+              </td>
+            </tr>`;
           });
           
           document.getElementById('salesBody').innerHTML = html;
@@ -115,7 +115,7 @@
       window.deleteSale = async (saleId) => {
         if (confirm('Satışı iptal etmek istediğinize emin misiniz?')) {
           try {
-            const response = await fetch('/api/sales-history/' + saleId + '?restore=true', { method: 'DELETE' });
+            const response = await fetch(`/api/sales-history/${saleId}?restore=true`, { method: 'DELETE' });
             const result = await response.json();
             if (result.success) {
               alert('✅ ' + result.message);
