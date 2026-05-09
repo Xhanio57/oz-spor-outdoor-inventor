@@ -31,9 +31,24 @@
     </div>
 
     <script>
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
       const categoryLabels = {
         'Çocuk Giyim': (size) => size + ' Yaş',
         'default': (size) => size
+      };
+
+      const bindDeleteButtons = () => {
+        document.querySelectorAll('.delete-sale-btn').forEach((button) => {
+          button.addEventListener('click', () => {
+            window.deleteSale(button.dataset.saleId);
+          });
+        });
       };
 
       async function loadSalesHistory() {
@@ -47,22 +62,29 @@
             const sizeDisplay = formatter(sale.size);
             const totalPrice = (sale.price * sale.quantity).toFixed(2);
             const date = new Date(sale.createdAt).toLocaleString('tr-TR');
+            const saleId = escapeHtml(sale._id);
+            const productName = escapeHtml(sale.productName);
+            const category = escapeHtml(sale.category || 'N/A');
+            const safeSizeDisplay = escapeHtml(sizeDisplay);
+            const paymentMethod = escapeHtml(sale.paymentMethod);
+            const safeDate = escapeHtml(date);
             
             html += '<tr>' +
               '<td>' + (idx + 1) + '</td>' +
-              '<td>' + sale.productName + '</td>' +
-              '<td>' + (sale.category || 'N/A') + '</td>' +
-              '<td>' + sizeDisplay + '</td>' +
+              '<td>' + productName + '</td>' +
+              '<td>' + category + '</td>' +
+              '<td>' + safeSizeDisplay + '</td>' +
               '<td>' + sale.quantity + '</td>' +
               '<td>' + sale.price.toFixed(2) + ' TL</td>' +
               '<td>' + totalPrice + ' TL</td>' +
-              '<td>' + sale.paymentMethod + '</td>' +
-              '<td>' + date + '</td>' +
-              '<td><button onclick="deleteSale(\'' + sale._id + '\')" class="btn btn-small btn-danger">Geri Al</button></td>' +
+              '<td>' + paymentMethod + '</td>' +
+              '<td>' + safeDate + '</td>' +
+              '<td><button class="btn btn-small btn-danger delete-sale-btn" data-sale-id="' + saleId + '">Geri Al</button></td>' +
             '</tr>';
           });
           
           document.getElementById('salesBody').innerHTML = html;
+          bindDeleteButtons();
         } catch (error) {
           console.error('Satış geçmişi yükleme hatası:', error);
         }
@@ -87,22 +109,29 @@
             const sizeDisplay = formatter(sale.size);
             const totalPrice = (sale.price * sale.quantity).toFixed(2);
             const date = new Date(sale.createdAt).toLocaleString('tr-TR');
+            const saleId = escapeHtml(sale._id);
+            const productName = escapeHtml(sale.productName);
+            const category = escapeHtml(sale.category || 'N/A');
+            const safeSizeDisplay = escapeHtml(sizeDisplay);
+            const paymentMethod = escapeHtml(sale.paymentMethod);
+            const safeDate = escapeHtml(date);
             
             html += '<tr>' +
               '<td>' + (idx + 1) + '</td>' +
-              '<td>' + sale.productName + '</td>' +
-              '<td>' + (sale.category || 'N/A') + '</td>' +
-              '<td>' + sizeDisplay + '</td>' +
+              '<td>' + productName + '</td>' +
+              '<td>' + category + '</td>' +
+              '<td>' + safeSizeDisplay + '</td>' +
               '<td>' + sale.quantity + '</td>' +
               '<td>' + sale.price.toFixed(2) + ' TL</td>' +
               '<td>' + totalPrice + ' TL</td>' +
-              '<td>' + sale.paymentMethod + '</td>' +
-              '<td>' + date + '</td>' +
-              '<td><button onclick="deleteSale(\'' + sale._id + '\')" class="btn btn-small btn-danger">Geri Al</button></td>' +
+              '<td>' + paymentMethod + '</td>' +
+              '<td>' + safeDate + '</td>' +
+              '<td><button class="btn btn-small btn-danger delete-sale-btn" data-sale-id="' + saleId + '">Geri Al</button></td>' +
             '</tr>';
           });
           
           document.getElementById('salesBody').innerHTML = html;
+          bindDeleteButtons();
         } catch (error) {
           alert('Hata: ' + error.message);
         }
