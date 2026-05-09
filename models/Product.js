@@ -53,7 +53,7 @@ const productSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, 'Kategori zorunludur'],
-      enum: ['Spor Giyim', 'Judogi', 'Kamp Malzemeleri', 'Ayakkabı', 'Aksesuarlar', 'Diğer'],
+      enum: ['Spor Giyim', 'Judogi', 'Kamp Malzemeleri', 'Çocuk Giyim', 'Ayakkabı', 'Aksesuarlar', 'Diğer'],
       default: 'Diğer'
     },
     sizeStock: [sizeStockSchema],

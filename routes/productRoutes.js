@@ -146,29 +146,58 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
     let totalStock = 0;
     let totalRevenue = 0;
 
-    let tableRows = products.map((p, idx) => {
-      const prodTotalStock = p.sizeStock.reduce((a, b) => a + b.stock, 0);
-      const prodRevenue = p.price * prodTotalStock;
-      
+    const tableRows = products.map((p, idx) => {
+      const sizeStock = Array.isArray(p.sizeStock) ? p.sizeStock : [];
+      const prodTotalStock = sizeStock.reduce((a, b) => a + (b.stock || 0), 0);
+      const prodRevenue = Number(p.price || 0) * prodTotalStock;
+
       totalStock += prodTotalStock;
       totalRevenue += prodRevenue;
 
-      const sizeDetails = p.sizeStock.map(s => `${s.size}(${s.stock})`).join(', ');
-      const bgColor = idx % 2 === 0 ? '#ffffff' : '#f3f4f6';
+      const sizeDetails = sizeStock
+        .filter(s => (s.stock || 0) > 0)
+        .map(s => `${s.size}:${s.stock}`)
+        .join(' • ') || '-';
+
+      const stockColor = prodTotalStock === 0
+        ? '#dc2626'
+        : prodTotalStock < 10
+          ? '#f59e0b'
+          : '#10b981';
+
+      const bgColor = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
 
       return `
         <tr style="background-color: ${bgColor};">
-          <td style="text-align: center;">${idx + 1}</td>
-          <td>${p.name}</td>
-          <td>${p.category}</td>
-          <td style="text-align: center;">${p.barcode}</td>
-          <td style="text-align: right;">${p.price.toFixed(2)} TL</td>
-          <td style="text-align: center; color: ${prodTotalStock === 0 ? '#dc2626' : prodTotalStock < 10 ? '#f59e0b' : '#10b981'}; font-weight: bold;">${prodTotalStock}</td>
-          <td style="text-align: right;">${prodRevenue.toFixed(2)} TL</td>
-          <td>${sizeDetails}</td>
+          <td class="center">${idx + 1}</td>
+          <td class="name-cell">${p.name || ''}</td>
+          <td class="center">${p.category || ''}</td>
+          <td class="center barcode-cell">${p.barcode || ''}</td>
+          <td class="right">${Number(p.price || 0).toFixed(2)} TL</td>
+          <td class="center stock-cell" style="color:${stockColor};">${prodTotalStock}</td>
+          ${includeStock ? `<td class="sizes-cell">${sizeDetails}</td>` : ''}
         </tr>
       `;
     }).join('');
+
+    const colgroup = includeStock
+      ? `
+        <th style="width:6%;">#</th>
+        <th style="width:30%;">Ürün Adı</th>
+        <th style="width:16%;">Kategori</th>
+        <th style="width:18%;">Barkod</th>
+        <th style="width:12%;">Fiyat</th>
+        <th style="width:8%;">Stok</th>
+        <th style="width:30%;">Beden Detayları</th>
+      `
+      : `
+        <th style="width:7%;">#</th>
+        <th style="width:39%;">Ürün Adı</th>
+        <th style="width:20%;">Kategori</th>
+        <th style="width:20%;">Barkod</th>
+        <th style="width:14%;">Fiyat</th>
+        <th style="width:10%;">Stok</th>
+      `;
 
     const html = `
       <!DOCTYPE html>
@@ -177,104 +206,114 @@ router.get('/api/products/export/pdf/:includeStock', async (req, res) => {
         <meta charset="UTF-8">
         <title>Stok Envanteri</title>
         <style>
+          @page {
+            size: A4 portrait;
+            margin: 8mm;
+          }
           body {
             font-family: Arial, sans-serif;
-            margin: 20px;
-            color: #333;
+            margin: 0;
+            color: #1f2937;
+            font-size: 10px;
           }
           h1 {
             text-align: center;
-            font-size: 24px;
-            margin-bottom: 5px;
+            font-size: 18px;
+            margin: 0 0 4px 0;
+            color: #111827;
           }
           .subtitle {
             text-align: center;
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 20px;
+            font-size: 10px;
+            color: #6b7280;
+            margin-bottom: 10px;
+          }
+          .summary {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            margin-bottom: 10px;
+          }
+          .summary-item {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 10px;
+          }
+          .summary-item strong {
+            color: #2563eb;
           }
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 30px;
+            table-layout: fixed;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tr {
+            page-break-inside: avoid;
           }
           th {
             background-color: #2563eb;
             color: white;
-            padding: 12px;
+            padding: 6px 5px;
             text-align: left;
             font-weight: bold;
-            font-size: 13px;
+            font-size: 10px;
+            border: 1px solid #dbeafe;
           }
           td {
-            padding: 10px;
-            border-bottom: 1px solid #e5e7eb;
-            font-size: 12px;
+            padding: 5px;
+            border: 1px solid #e5e7eb;
+            font-size: 9.5px;
+            vertical-align: top;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
           }
-          .summary {
-            background-color: #f3f4f6;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 20px;
-          }
-          .summary h3 {
-            margin-top: 0;
-            font-size: 14px;
-            color: #2563eb;
-          }
-          .summary-items {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-          }
-          .summary-item {
-            font-size: 13px;
-          }
-          .summary-item strong {
-            color: #2563eb;
-            font-weight: bold;
-          }
+          .center { text-align: center; }
+          .right { text-align: right; }
+          .stock-cell { font-weight: bold; }
+          .name-cell { font-weight: 600; }
+          .barcode-cell { font-size: 8.5px; }
+          .sizes-cell { font-size: 8.5px; line-height: 1.3; }
         </style>
       </head>
       <body>
         <h1>Öz Spor & Outdoor - Stok Envanteri</h1>
         <div class="subtitle">Tarih: ${new Date().toLocaleDateString('tr-TR')} ${new Date().toLocaleTimeString('tr-TR')}</div>
-        
+
+        <div class="summary">
+          <div class="summary-item">Toplam Ürün: <strong>${products.length}</strong></div>
+          <div class="summary-item">Toplam Kategori: <strong>${new Set(products.map(p => p.category)).size}</strong></div>
+          <div class="summary-item">Toplam Stok: <strong>${totalStock} adet</strong></div>
+          <div class="summary-item">Potansiyel Ciro: <strong>${totalRevenue.toFixed(2)} TL</strong></div>
+        </div>
+
         <table>
           <thead>
             <tr>
-              <th style="width: 5%;">S.N</th>
-              <th style="width: 20%;">Ürün Adı</th>
-              <th style="width: 12%;">Kategori</th>
-              <th style="width: 10%;">Barkod</th>
-              <th style="width: 10%;">Birim Fiyat</th>
-              <th style="width: 10%;">Toplam Stok</th>
-              <th style="width: 12%;">Potansiyel Ciro</th>
-              <th style="width: 21%;">Beden Detayları</th>
+              ${colgroup}
             </tr>
           </thead>
           <tbody>
             ${tableRows}
           </tbody>
         </table>
-
-        <div class="summary">
-          <h3>ÖZET</h3>
-          <div class="summary-items">
-            <div class="summary-item">Toplam Ürün: <strong>${products.length}</strong></div>
-            <div class="summary-item">Toplam Kategori: <strong>${new Set(products.map(p => p.category)).size}</strong></div>
-            <div class="summary-item">Toplam Stok: <strong>${totalStock} adet</strong></div>
-            <div class="summary-item">Toplam Potansiyel Ciro: <strong>${totalRevenue.toFixed(2)} TL</strong></div>
-          </div>
-        </div>
       </body>
       </html>
     `;
 
     const options = {
       format: 'A4',
-      orientation: 'landscape',
-      margin: '10mm'
+      orientation: 'portrait',
+      border: {
+        top: '6mm',
+        right: '6mm',
+        bottom: '6mm',
+        left: '6mm'
+      }
     };
 
     htmlPdf.create(html, options).toStream((err, stream) => {
@@ -327,14 +366,38 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
         discountInfo = `${product.price.toFixed(2)} TL → ${finalPrice.toFixed(2)} TL (-${product.discountValue.toFixed(2)} TL)`;
       }
 
-      // Stok sayısı kadar etiket oluştur
-      const totalStock = product.sizeStock.reduce((a, b) => a + b.stock, 0);
-      const labelCount = useStock ? totalStock : 1;
+      const sizeStockList = Array.isArray(product.sizeStock) ? product.sizeStock : [];
 
-      for (let i = 0; i < labelCount; i++) {
+      if (useStock) {
+        sizeStockList.forEach(sizeItem => {
+          const stockQty = Number(sizeItem.stock) || 0;
+          if (stockQty <= 0) return;
+
+          const sizeLabel = product.category === 'Çocuk Giyim'
+            ? sizeItem.size + ' Yaş'
+            : sizeItem.size;
+
+          for (let i = 0; i < stockQty; i++) {
+            labels.push({
+              name: product.name,
+              category: product.category,
+              sizeLabel: sizeLabel,
+              price: product.price,
+              finalPrice: finalPrice,
+              discountInfo: discountInfo,
+              barcode: product.barcode,
+              image: product.image,
+              labelText: product.labelText || '',
+              oldPrice: parsedOldPrice,
+              labelNote: labelNote || ''
+            });
+          }
+        });
+      } else {
         labels.push({
           name: product.name,
           category: product.category,
+          sizeLabel: '',
           price: product.price,
           finalPrice: finalPrice,
           discountInfo: discountInfo,
@@ -395,15 +458,16 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
       labelHtml += `
         <div class="label">
           <img src="${label.image}" alt="${label.name}" class="label-image" onerror="this.src='/images/default-product.svg'">
-          <div class="label-name">${label.name}</div>
-          <div class="label-category">${label.category}</div>
+          <div class="label-name">${label.name || ''}</div>
+          ${label.category ? '<div class="label-category">' + label.category + '</div>' : ''}
+          ${label.sizeLabel ? '<div class="label-size-badge">' + label.sizeLabel + '</div>' : ''}
           ${priceHtml}
           <div class="label-barcode-img">
             <svg id="barcode-${idx}"></svg>
           </div>
-          <div class="label-barcode-text">${label.barcode}</div>
-          ${specialText}
-          ${noteHtml}
+          <div class="label-barcode-text">${label.barcode || ''}</div>
+          ${label.labelText ? '<div class="label-special-text">' + label.labelText + '</div>' : ''}
+          ${label.labelNote ? '<div class="label-note">' + label.labelNote + '</div>' : ''}
         </div>
       `;
     });
@@ -430,39 +494,50 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
             padding: 5mm;
           }
           .label {
-            width: 40mm;
-            height: 60mm;
+            width: 38mm;
+            height: 57mm;
+            border: 1px solid #111;
             background: white;
-            border: 2px solid #000;
-            padding: 2.5mm;
             display: flex;
             flex-direction: column;
-            gap: 1.5mm;
-            box-sizing: border-box;
+            align-items: stretch;
+            justify-content: flex-start;
+            padding: 1.5mm;
+            overflow: hidden;
             page-break-inside: avoid;
-            position: relative;
+            gap: 1mm;
           }
           .label-image {
             width: 100%;
-            height: 15mm;
-            object-fit: cover;
-            border: 0.5px solid #ddd;
-            border-radius: 2px;
+            height: 14mm;
+            object-fit: contain;
+            border-radius: 1mm;
+            background: #fff;
+            flex-shrink: 0;
           }
           .label-name {
-            font-size: 9px;
-            font-weight: bold;
-            color: #333;
+            font-size: 9pt;
+            font-weight: 800;
+            text-align: center;
             line-height: 1.1;
+            min-height: 8mm;
+            max-height: 8mm;
             overflow: hidden;
-            text-overflow: ellipsis;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
+            word-break: break-word;
+            color: #111827;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 1mm;
+            flex-shrink: 0;
           }
           .label-category {
-            font-size: 7px;
-            color: #666;
+            font-size: 7.5pt;
+            color: #4b5563;
+            text-align: center;
+            line-height: 1.1;
+            min-height: 3.5mm;
+            max-height: 3.5mm;
+            overflow: hidden;
+            flex-shrink: 0;
           }
           .price-section {
             border-top: 0.5px solid #ddd;
@@ -522,17 +597,18 @@ router.get('/api/products/bulk-labels-pdf', async (req, res) => {
             padding-top: 1mm;
           }
           .label-note {
-            font-size: 8px;
-            color: #dc2626;
+            font-size: 7pt;
+            color: #444;
             text-align: center;
-            border-top: 0.5px solid #ddd;
+            margin-top: auto;
+            min-height: 3mm;
+            max-height: 6mm;
+            overflow: hidden;
+            line-height: 1.05;
+            word-break: break-word;
+            border-top: 1px solid #e5e7eb;
             padding-top: 1mm;
-            flex-grow: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            line-height: 1.2;
+            flex-shrink: 0;
           }
           @media print {
             body { background: white; padding: 0; margin: 0; }
