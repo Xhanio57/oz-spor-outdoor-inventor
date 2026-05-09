@@ -31,7 +31,7 @@
 
     <script>
       const categoryLabels = {
-        'Çocuk Giyim': (size) => `${size} Yaş`,
+        'Çocuk Giyim': (size) => size + ' Yaş',
         'default': (size) => size
       };
 
@@ -44,25 +44,25 @@
           products.forEach(p => {
             const totalStock = p.sizeStock.reduce((a, b) => a + b.stock, 0);
             const formatter = categoryLabels[p.category] || categoryLabels['default'];
-            const sizeDetails = p.sizeStock.map(s => `${formatter(s.size)}(${s.stock})`).join(', ');
+            const sizeDetails = p.sizeStock.map(s => formatter(s.size) + '(' + s.stock + ')').join(', ');
             
             const stockColor = totalStock === 0 ? '#dc2626' : totalStock < 10 ? '#f59e0b' : '#10b981';
             
-            html += `<div class="product-card">
-              <img src="${p.image}" alt="${p.name}" style="width:100%;height:120px;object-fit:cover;border-radius:5px;">
-              <h4>${p.name}</h4>
-              <p><strong>Kategori:</strong> ${p.category}</p>
-              <p><strong>Fiyat:</strong> ${p.price.toFixed(2)} TL</p>
-              <p><strong>Barkod:</strong> ${p.barcode}</p>
-              <p><strong>Stok:</strong> <span style="color:${stockColor};font-weight:bold;">${totalStock}</span></p>
-              <p><strong>Bedenler:</strong> ${sizeDetails}</p>
-              <div class="btn-group">
-                <button onclick="openStockModal('${p._id}')" class="btn btn-small">📊 Stok Güncelle</button>
-                <button onclick="editProduct('${p._id}')" class="btn btn-small">✏️ Düzenle</button>
-                <button onclick="deleteProduct('${p._id}')" class="btn btn-small btn-danger">🗑️ Sil</button>
-                <button onclick="labelPDF('${p._id}')" class="btn btn-small">🏷️ Etiket</button>
-              </div>
-            </div>`;
+            html += '<div class="product-card">' +
+              '<img src="' + p.image + '" alt="' + p.name + '" style="width:100%;height:120px;object-fit:cover;border-radius:5px;">' +
+              '<h4>' + p.name + '</h4>' +
+              '<p><strong>Kategori:</strong> ' + p.category + '</p>' +
+              '<p><strong>Fiyat:</strong> ' + p.price.toFixed(2) + ' TL</p>' +
+              '<p><strong>Barkod:</strong> ' + p.barcode + '</p>' +
+              '<p><strong>Stok:</strong> <span style="color:' + stockColor + ';font-weight:bold;">' + totalStock + '</span></p>' +
+              '<p><strong>Bedenler:</strong> ' + sizeDetails + '</p>' +
+              '<div class="btn-group">' +
+                '<button onclick="openStockModal(\'' + p._id + '\')" class="btn btn-small">📊 Stok Güncelle</button>' +
+                '<button onclick="editProduct(\'' + p._id + '\')" class="btn btn-small">✏️ Düzenle</button>' +
+                '<button onclick="deleteProduct(\'' + p._id + '\')" class="btn btn-small btn-danger">🗑️ Sil</button>' +
+                '<button onclick="labelPDF(\'' + p._id + '\')" class="btn btn-small">🏷️ Etiket</button>' +
+              '</div>' +
+            '</div>';
           });
           
           document.getElementById('productGrid').innerHTML = html;
@@ -81,11 +81,11 @@
           let html = '<form onsubmit="submitStockUpdate(event, \'' + productId + '\')"><table>';
           product.sizeStock.forEach(size => {
             const display = formatter(size.size);
-            html += `<tr>
-              <td>${display}</td>
-              <td>Mevcut: ${size.stock}</td>
-              <td><input type="number" id="stock_${size.size}" placeholder="Ekle/Çıkar" required></td>
-            </tr>`;
+            html += '<tr>' +
+              '<td>' + display + '</td>' +
+              '<td>Mevcut: ' + size.stock + '</td>' +
+              '<td><input type="number" id="stock_' + size.size + '" placeholder="Ekle/Çıkar" required></td>' +
+            '</tr>';
           });
           html += '</table><button type="submit" class="btn btn-primary">✅ Güncelle</button></form>';
           
@@ -106,7 +106,7 @@
           for (let size of product.sizeStock) {
             const qty = document.getElementById('stock_' + size.size).value;
             if (qty) {
-              await fetch(`/api/products/${productId}/size-stock`, {
+              await fetch('/api/products/' + productId + '/size-stock', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ size: size.size, quantity: parseInt(qty) })
@@ -138,13 +138,13 @@
       };
 
       window.labelPDF = (productId) => {
-        window.open(`/api/products/${productId}/label-pdf`, '_blank');
+        window.open('/api/products/' + productId + '/label-pdf', '_blank');
       };
 
       window.deleteProduct = async (productId) => {
         if (confirm('Ürünü silmek istediğinize emin misiniz?')) {
           try {
-            const response = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
+            const response = await fetch('/api/products/' + productId, { method: 'DELETE' });
             const result = await response.json();
             if (result.success) {
               alert('✅ Ürün silindi!');
