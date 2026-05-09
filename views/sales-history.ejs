@@ -66,6 +66,7 @@
             const productName = escapeHtml(sale.productName);
             const category = escapeHtml(sale.category || 'N/A');
             const safeSizeDisplay = escapeHtml(sizeDisplay);
+            const safeQuantity = escapeHtml(sale.quantity);
             const paymentMethod = escapeHtml(sale.paymentMethod);
             const safeDate = escapeHtml(date);
             
@@ -74,7 +75,7 @@
               '<td>' + productName + '</td>' +
               '<td>' + category + '</td>' +
               '<td>' + safeSizeDisplay + '</td>' +
-              '<td>' + sale.quantity + '</td>' +
+              '<td>' + safeQuantity + '</td>' +
               '<td>' + sale.price.toFixed(2) + ' TL</td>' +
               '<td>' + totalPrice + ' TL</td>' +
               '<td>' + paymentMethod + '</td>' +
@@ -113,6 +114,7 @@
             const productName = escapeHtml(sale.productName);
             const category = escapeHtml(sale.category || 'N/A');
             const safeSizeDisplay = escapeHtml(sizeDisplay);
+            const safeQuantity = escapeHtml(sale.quantity);
             const paymentMethod = escapeHtml(sale.paymentMethod);
             const safeDate = escapeHtml(date);
             
@@ -121,7 +123,7 @@
               '<td>' + productName + '</td>' +
               '<td>' + category + '</td>' +
               '<td>' + safeSizeDisplay + '</td>' +
-              '<td>' + sale.quantity + '</td>' +
+              '<td>' + safeQuantity + '</td>' +
               '<td>' + sale.price.toFixed(2) + ' TL</td>' +
               '<td>' + totalPrice + ' TL</td>' +
               '<td>' + paymentMethod + '</td>' +
