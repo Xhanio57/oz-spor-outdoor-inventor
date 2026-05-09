@@ -54,7 +54,7 @@
             label.style.backgroundColor = '#f0f0f0';
             label.style.borderRadius = '4px';
             label.style.cursor = 'pointer';
-            label.innerHTML = `<input type="checkbox" name="sizes" value="${size}" style="cursor: pointer;"> ${selected === 'Çocuk Giyim' ? size + ' Yaş' : size}`;
+            label.innerHTML = '<input type="checkbox" name="sizes" value="' + size + '" style="cursor: pointer;"> ' + (selected === 'Çocuk Giyim' ? size + ' Yaş' : size);
             sizeContainer.appendChild(label);
           });
         }
